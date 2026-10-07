@@ -1,7 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { storeNotFound, storeNotSelected, toSKaupatError, USER_MESSAGES } from "./errors.js";
+import { listNotFound, SKaupatError, storeNotFound, storeNotSelected, toSKaupatError, USER_MESSAGES } from "./errors.js";
+import { addItemsToList, type ListWriteResult, type WithToken } from "./lists/service.js";
+import type { ShoppingList, ShoppingListApi } from "./lists/types.js";
 import { log } from "./log.js";
 import type { SKaupatAuth } from "./auth/types.js";
 import { PRODUCT_SORTS, STORE_CHAINS, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
@@ -27,6 +29,8 @@ export interface ServerOptions {
   selection?: StoreSelection;
   /** Clock, for tests. */
   now?: () => Date;
+  /** Shopping-list calls (need a login). Without it the list tools answer unsupported. */
+  lists?: ShoppingListApi;
 }
 
 export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: ServerOptions = {}): McpServer {
@@ -221,6 +225,179 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       }),
   );
 
+  const withToken: WithToken = (fn) => (auth.withAccessToken ? auth.withAccessToken(fn) : auth.getAccessToken().then(fn));
+  const requireLists = (): ShoppingListApi => {
+    if (!options.lists) throw new SKaupatError("unsupported", "Shopping lists are not available in this server.");
+    return options.lists;
+  };
+  const getListOrThrow = async (listId: string, store: string): Promise<ShoppingList> => {
+    const list = await withToken((t) => requireLists().getList(t, listId, store));
+    if (!list) throw listNotFound(listId);
+    return list;
+  };
+
+  const listItems = z
+    .array(
+      z.object({
+        productId: z.string().min(1).describe("Product ID (EAN) from search_products."),
+        quantity: z
+          .number()
+          .positive()
+          .max(99)
+          .default(1)
+          .describe("How many (pieces), or kilograms for products sold by weight (priceBasis per_weight)."),
+        allowSubstitutes: z
+          .boolean()
+          .default(true)
+          .describe("Whether the store may pick a similar product if this one is out of stock."),
+      }),
+    )
+    .max(50);
+  const listStoreId = storeId.describe(
+    "Store whose prices to show for list items. Leave out to use the store the user chose with select_store.",
+  );
+
+  server.registerTool(
+    "get_shopping_lists",
+    {
+      title: "Get the user's S-kaupat shopping lists",
+      description:
+        "All of the logged-in user's S-kaupat shopping lists, with their items and current prices in the user's " +
+        "store. Needs a login: fails with login_required or session_expired, then the app shows its 'Log in' " +
+        "button (start_login).",
+      inputSchema: { storeId: listStoreId },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ storeId }) =>
+      run("get_shopping_lists", async () => {
+        const store = resolveStoreId(storeId);
+        const lists = await withToken((t) => requireLists().getLists(t, store));
+        return { storeId: store, lists: lists.map(listView) };
+      }),
+  );
+
+  server.registerTool(
+    "get_shopping_list",
+    {
+      title: "Get one S-kaupat shopping list",
+      description:
+        "One shopping list with its items, current prices in the user's store and an estimated total. Fails with " +
+        "list_not_found if it was deleted. Needs a login.",
+      inputSchema: { listId: z.string().min(1).describe("List ID from get_shopping_lists."), storeId: listStoreId },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ listId, storeId }) =>
+      run("get_shopping_list", async () => {
+        const store = resolveStoreId(storeId);
+        return { list: listView(await getListOrThrow(listId, store)) };
+      }),
+  );
+
+  server.registerTool(
+    "create_shopping_list",
+    {
+      title: "Create an S-kaupat shopping list",
+      description:
+        "Create a new shopping list on the user's S-kaupat account, optionally with products. Returns the list " +
+        "and, per product, whether it was added or is missing (with a reason and Finnish and English messages). " +
+        "The user finishes on the S-kaupat site: open the list and press 'Lisää kaikki ostoskoriin' (add all to " +
+        "cart), then check out. Needs a login.",
+      inputSchema: {
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(60)
+          .describe("List name, e.g. 'Viikonloppu'. Plain words work best; the site rejects some punctuation."),
+        items: listItems.default([]).describe("Products to put on the new list."),
+        storeId: listStoreId,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    },
+    async ({ name, items, storeId }) =>
+      run("create_shopping_list", async () => {
+        const store = resolveStoreId(storeId);
+        const lists = requireLists();
+        const list = await withToken((t) => lists.createList(t, name, store));
+        const result = await addItemsToList({ client, lists, withToken, storeId: store, list, items });
+        return listWriteView(result);
+      }),
+  );
+
+  server.registerTool(
+    "add_to_shopping_list",
+    {
+      title: "Add products to an S-kaupat shopping list",
+      description:
+        "Put products on an existing shopping list. A product already on the list gets the quantity given here " +
+        "(it is not added twice). Returns, per product, added, updated, unchanged, missing (not sold in this " +
+        "store or unknown barcode) or uncertain, so the app can show exactly what happened. Products S-kaupat " +
+        "says are out of stock are still added, with a warning. Needs a login.",
+      inputSchema: {
+        listId: z.string().min(1).describe("List ID from get_shopping_lists or create_shopping_list."),
+        items: listItems.min(1),
+        storeId: listStoreId,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ listId, items, storeId }) =>
+      run("add_to_shopping_list", async () => {
+        const store = resolveStoreId(storeId);
+        const lists = requireLists();
+        const list = await getListOrThrow(listId, store);
+        return listWriteView(await addItemsToList({ client, lists, withToken, storeId: store, list, items }));
+      }),
+  );
+
+  server.registerTool(
+    "remove_from_shopping_list",
+    {
+      title: "Remove products from an S-kaupat shopping list",
+      description:
+        "Take products off a shopping list by product ID. Returns the list afterwards and which products were " +
+        "removed or were not on the list. Needs a login.",
+      inputSchema: {
+        listId: z.string().min(1).describe("List ID from get_shopping_lists."),
+        productIds: z.array(z.string().min(1)).min(1).max(50).describe("Product IDs (EANs) to remove."),
+        storeId: listStoreId,
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ listId, productIds, storeId }) =>
+      run("remove_from_shopping_list", async () => {
+        const store = resolveStoreId(storeId);
+        const lists = requireLists();
+        let list = await getListOrThrow(listId, store);
+        const removed: string[] = [];
+        const notOnList: string[] = [];
+        for (const productId of new Set(productIds)) {
+          const rows = list.items.filter((i) => i.productId === productId);
+          if (rows.length === 0) notOnList.push(productId);
+          for (const row of rows) list = await withToken((t) => lists.removeItem(t, list.id, row.itemId, store));
+          if (rows.length > 0) removed.push(productId);
+        }
+        return { list: listView(list), removed, notOnList };
+      }),
+  );
+
+  server.registerTool(
+    "delete_shopping_list",
+    {
+      title: "Delete an S-kaupat shopping list",
+      description:
+        "Permanently delete a whole shopping list from the user's S-kaupat account. Only call this when the user " +
+        "has clearly asked to delete that list. Needs a login.",
+      inputSchema: { listId: z.string().min(1).describe("List ID from get_shopping_lists.") },
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ listId }) =>
+      run("delete_shopping_list", async () => {
+        const lists = requireLists();
+        await withToken((t) => lists.deleteList(t, listId));
+        return { deletedListId: listId };
+      }),
+  );
+
   return server;
 }
 
@@ -229,6 +406,46 @@ const LOGIN_MESSAGES = {
   cancelled: { fi: "Kirjautuminen keskeytettiin.", en: "Login was cancelled." },
   timed_out: { fi: "Kirjautuminen aikakatkaistiin. Yritä uudelleen.", en: "Login timed out. Please try again." },
 };
+
+/** Where the user finishes: the site turns a list into a cart with one button. */
+const LIST_NEXT_STEP = {
+  fi: "Avaa ostoslista S-kaupat-sivulla ja paina \"Lisää kaikki ostoskoriin\". Tilaus vahvistetaan sivulla.",
+  en: "Open the list on the S-kaupat site and press \"Lisää kaikki ostoskoriin\" (add all to cart), then check out there.",
+};
+
+function listView(list: ShoppingList) {
+  let amount = 0;
+  let complete = true;
+  for (const item of list.items) {
+    const price = item.product?.price;
+    if (price == null) complete = false;
+    else amount += price * item.quantity;
+    if (item.product?.approximatePrice) complete = false;
+  }
+  return {
+    ...list,
+    itemCount: list.items.length,
+    // Euros at current shelf prices; complete is false when a price is missing or approximate (weighed goods).
+    estimatedTotal: { amount: Math.round(amount * 100) / 100, complete },
+  };
+}
+
+function listWriteView({ list, results }: ListWriteResult) {
+  const count = (status: string) => results.filter((r) => r.status === status).length;
+  return {
+    list: listView(list),
+    results,
+    summary: {
+      added: count("added"),
+      updated: count("updated"),
+      unchanged: count("unchanged"),
+      missing: count("missing"),
+      uncertain: count("uncertain"),
+      withWarnings: results.filter((r) => "warning" in r && r.warning).length,
+    },
+    nextStep: LIST_NEXT_STEP,
+  };
+}
 
 /** Opening hours are a nice-to-have in search results; a failure must not hide the stores. */
 async function tryGetStores(client: SKaupatClient, ids: string[]): Promise<Map<string, StoreDetails> | null> {

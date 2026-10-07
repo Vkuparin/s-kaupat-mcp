@@ -103,7 +103,7 @@ test("get_products looks up all EANs in one request", async () => {
   const res = await client.getProducts({ storeId: "517609418", ids: ["6414893386488", "0000000000000"] });
   assert.equal(bodies.length, 1);
   assert.match(bodies[0].query, /products\(eans: \$eans/);
-  assert.deepEqual(bodies[0].variables, { storeId: "517609418", eans: ["6414893386488", "0000000000000"], limit: 2 });
+  assert.deepEqual(bodies[0].variables, { storeId: "517609418", eans: ["6414893386488", "0000000000000"] });
   assert.deepEqual(res.results.map((r) => r.status), ["found", "not_found"]);
 });
 

@@ -11,6 +11,7 @@ export type ErrorCode =
   | "store_not_selected"
   | "store_not_found"
   | "product_unavailable"
+  | "list_not_found"
   | "blocked"
   | "invalid_quantity"
   | "context_changed"
@@ -48,6 +49,10 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
   product_unavailable: {
     fi: "Tuotetta ei ole saatavilla tässä kaupassa.",
     en: "This product is not available in this store.",
+  },
+  list_not_found: {
+    fi: "Ostoslistaa ei löytynyt. Se on ehkä poistettu.",
+    en: "That shopping list could not be found. It may have been deleted.",
   },
   blocked: {
     fi: "S-kaupat esti pyynnön. Yritä hetken päästä uudelleen.",
@@ -99,6 +104,10 @@ export function storeNotSelected(): SKaupatError {
 
 export function storeNotFound(storeId: string): SKaupatError {
   return new SKaupatError("store_not_found", `Store ${storeId} was not found.`, { storeId });
+}
+
+export function listNotFound(listId: string): SKaupatError {
+  return new SKaupatError("list_not_found", `Shopping list ${listId} was not found.`, { listId });
 }
 
 export function toSKaupatError(err: unknown): SKaupatError {

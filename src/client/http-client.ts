@@ -2,8 +2,11 @@ import { z } from "zod";
 import { isProductUnavailableError, SKaupatError, storeNotFound } from "../errors.js";
 import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
+import type { ListItemInput, ShoppingList, ShoppingListApi, ShoppingListItem } from "../lists/types.js";
 import type {
+  BasketCheck,
   GetProductsInput,
+  ListableProduct,
   Product,
   ProductLookup,
   ProductSearchResult,
@@ -63,11 +66,44 @@ const PRODUCT_LIST_QUERY = `query RemoteFilteredProducts($storeId: ID!, $querySt
   }
 }`;
 
-const PRODUCTS_BY_EAN_QUERY = `query RemoteProductsByEans($storeId: ID!, $eans: [String!], $limit: Int) {
+const PRODUCTS_BY_EAN_QUERY = `query RemoteProductsByEans($storeId: ID!, $eans: [String!]) {
   store(id: $storeId) { id
-    products(eans: $eans, limit: $limit) { total productListItems { product { ${PRODUCT_FIELDS} } } }
+    products(eans: $eans) { total productListItems { product { ${PRODUCT_FIELDS} } } }
   }
 }`;
+
+/** Same lookup through ProductList.items, which also exposes the per-store sokId (docs/samples/availability-with-date.json). */
+const LISTABLE_PRODUCTS_QUERY = `query RemoteListableProducts($storeId: ID!, $eans: [String!]) {
+  store(id: $storeId) { id
+    products(eans: $eans) { items { ${PRODUCT_FIELDS} store(storeId: $storeId) { sokId } } }
+  }
+}`;
+
+const CHECK_BASKET_QUERY = `query RemoteCheckBasket($items: [PartialCartItemInput!]!, $storeId: ID!) {
+  validateCart(partialCartItems: $items, storeId: $storeId) {
+    cartValidationItems { ean labels { labelText } validationError { __typename
+      ... on ProductAvailabilityError { labelText } } }
+  }
+}`;
+
+/** One shopping list with each item's product priced in $storeId. Items are a union in S-kaupat's schema. */
+const LIST_FIELDS =
+  "id name createdAt items { ... on ShoppingListItem { id ean sokId quantity isReplaceable name " +
+  `product(storeId: $storeId) { ${PRODUCT_FIELDS} } } }`;
+
+const LIST_QUERIES = {
+  getLists: `query RemoteGetUserLists($storeId: ID!) { shoppingLists { ${LIST_FIELDS} } }`,
+  getList: `query RemoteGetUserListById($id: ID!, $storeId: ID!) { shoppingList(id: $id) { ${LIST_FIELDS} } }`,
+  createList: `mutation RemoteCreateUserList($name: String!, $storeId: ID!) { createShoppingList(name: $name) { ${LIST_FIELDS} } }`,
+  addItem: `mutation RemoteAddToShoppingList($storeId: ID!, $shoppingListId: ID!, $item: ShoppingListItemInput!) {
+    createShoppingListItem(shoppingListId: $shoppingListId, item: $item) { ${LIST_FIELDS} } }`,
+  removeItem: `mutation RemoteRemoveShoppingListItem($storeId: ID!, $shoppingListId: ID!, $itemId: ID!) {
+    deleteShoppingListItem(shoppingListId: $shoppingListId, itemId: $itemId) { ${LIST_FIELDS} } }`,
+  deleteList: "mutation RemoteRemoveUserList($id: ID!) { deleteShoppingList(id: $id) { id } }",
+} as const;
+
+/** GraphQL error codes that mean the access token was not accepted. */
+const AUTH_ERROR_CODES = ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"];
 
 const SORTS: Record<ProductSort, { orderBy?: string; order?: string }> = {
   relevance: {},
@@ -142,7 +178,7 @@ const GraphQLErrorsSchema = z.object({
   ),
 });
 
-export class HttpSKaupatClient implements SKaupatClient {
+export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
   private readonly apiUrl: string;
   private readonly origin: string;
   private readonly timeoutMs: number;
@@ -224,7 +260,6 @@ export class HttpSKaupatClient implements SKaupatClient {
   async getProducts({ storeId, ids }: GetProductsInput): Promise<ProductsResult> {
     const { products, observedAt } = await this.listProducts(storeId, "RemoteProductsByEans", PRODUCTS_BY_EAN_QUERY, {
       eans: ids,
-      limit: ids.length,
     });
     const byId = new Map(products.map((p) => [p.id, p]));
     const results: ProductLookup[] = ids.map((id) => {
@@ -234,6 +269,106 @@ export class HttpSKaupatClient implements SKaupatClient {
         : { id, status: "not_found", reason: "Not sold in this store, or not a known barcode." };
     });
     return { storeId, results, observedAt };
+  }
+
+  async getListableProducts(storeId: string, ids: string[]): Promise<Map<string, ListableProduct>> {
+    const raw = await this.post("RemoteListableProducts", LISTABLE_PRODUCTS_QUERY, { storeId, eans: ids });
+    const parsed = ListableProductsResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected listable products response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected product response.");
+    }
+    const store = parsed.data.data.store;
+    if (!store) throw storeNotFound(storeId);
+    const observedAt = new Date().toISOString();
+    const found = new Map<string, ListableProduct>();
+    for (const p of store.products.items) {
+      found.set(p.ean, { product: mapProduct(p, storeId, observedAt), sokId: p.store?.sokId ?? null });
+    }
+    return found;
+  }
+
+  async checkBasket(storeId: string, items: { id: string; quantity: number }[]): Promise<Map<string, BasketCheck>> {
+    const raw = await this.post("RemoteCheckBasket", CHECK_BASKET_QUERY, {
+      storeId,
+      // PartialCartItemInput.itemCount is a string.
+      items: items.map((i) => ({ ean: i.id, itemCount: String(i.quantity) })),
+    });
+    const parsed = CheckBasketResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected cart check response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected cart check response.");
+    }
+    const checks = new Map<string, BasketCheck>();
+    for (const item of parsed.data.data.validateCart.cartValidationItems) {
+      const error = item.validationError;
+      const status: BasketCheck["status"] = !error
+        ? "ok"
+        : error.__typename === "ProductNotFoundError"
+          ? "not_found"
+          : error.__typename === "ProductNotInAssortmentError"
+            ? "not_in_store"
+            : "unavailable";
+      checks.set(item.ean, {
+        id: item.ean,
+        status,
+        label: error?.labelText ?? item.labels?.find((l) => l.labelText)?.labelText ?? null,
+      });
+    }
+    return checks;
+  }
+
+  // Shopping lists (need a login).
+
+  async getLists(accessToken: string, storeId: string): Promise<ShoppingList[]> {
+    const data = await this.listCall("RemoteGetUserLists", LIST_QUERIES.getLists, { storeId }, accessToken);
+    return z.array(ApiListSchema).parse(data.shoppingLists ?? []).map((l) => mapList(l, storeId));
+  }
+
+  async getList(accessToken: string, listId: string, storeId: string): Promise<ShoppingList | null> {
+    const data = await this.listCall("RemoteGetUserListById", LIST_QUERIES.getList, { id: listId, storeId }, accessToken);
+    const list = ApiListSchema.nullish().parse(data.shoppingList);
+    return list ? mapList(list, storeId) : null;
+  }
+
+  async createList(accessToken: string, name: string, storeId: string): Promise<ShoppingList> {
+    const data = await this.listCall("RemoteCreateUserList", LIST_QUERIES.createList, { name, storeId }, accessToken);
+    return mapList(ApiListSchema.parse(data.createShoppingList), storeId);
+  }
+
+  async addItem(accessToken: string, listId: string, item: ListItemInput, storeId: string): Promise<ShoppingList> {
+    const data = await this.listCall(
+      "RemoteAddToShoppingList",
+      LIST_QUERIES.addItem,
+      { storeId, shoppingListId: listId, item },
+      accessToken,
+    );
+    return mapList(ApiListSchema.parse(data.createShoppingListItem), storeId);
+  }
+
+  async removeItem(accessToken: string, listId: string, itemId: string, storeId: string): Promise<ShoppingList> {
+    const data = await this.listCall(
+      "RemoteRemoveShoppingListItem",
+      LIST_QUERIES.removeItem,
+      { storeId, shoppingListId: listId, itemId },
+      accessToken,
+    );
+    return mapList(ApiListSchema.parse(data.deleteShoppingListItem), storeId);
+  }
+
+  async deleteList(accessToken: string, listId: string): Promise<void> {
+    await this.listCall("RemoteRemoveUserList", LIST_QUERIES.deleteList, { id: listId }, accessToken);
+  }
+
+  /** An authenticated list call; returns `data`. A response that does not match the schema throws, which tools report as upstream_error. */
+  private async listCall(
+    operationName: string,
+    query: string,
+    variables: Record<string, unknown>,
+    accessToken: string,
+  ): Promise<Record<string, unknown>> {
+    const raw = (await this.post(operationName, query, variables, accessToken)) as { data?: Record<string, unknown> | null };
+    return raw.data ?? {};
   }
 
   private async listProducts(
@@ -258,24 +393,36 @@ export class HttpSKaupatClient implements SKaupatClient {
     };
   }
 
-  /** POST with this client's own query text. */
-  private async post(operationName: string, query: string, variables: Record<string, unknown>): Promise<unknown> {
-    log.debug("GraphQL request", { operationName, variables });
+  /** POST with this client's own query text. The access token, when given, is never logged. */
+  private async post(
+    operationName: string,
+    query: string,
+    variables: Record<string, unknown>,
+    accessToken?: string,
+  ): Promise<unknown> {
+    log.debug("GraphQL request", { operationName, variables, authenticated: Boolean(accessToken) });
+    const headers: Record<string, string> = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      Origin: this.origin,
+      Referer: `${this.origin}/`,
+    };
+    // The site sends the raw JWT, with no "Bearer" prefix.
+    if (accessToken) headers.authorization = accessToken;
     return this.send(operationName, new URL(this.apiUrl), {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        Origin: this.origin,
-        Referer: `${this.origin}/`,
-      },
+      headers,
       body: JSON.stringify({ operationName, query, variables }),
     });
   }
 
   private async send(operationName: string, url: URL, init: RequestInit): Promise<unknown> {
     const response = await this.fetchImpl(url, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
+    const authenticated = Boolean((init.headers as Record<string, string> | undefined)?.authorization);
 
+    if (authenticated && response.status === 401) {
+      throw new SKaupatError("session_expired", "S-kaupat answered HTTP 401 to an authenticated call.");
+    }
     if (response.status === 403 || response.status === 429) {
       throw new SKaupatError("blocked", `S-kaupat refused the request (HTTP ${response.status}).`);
     }
@@ -289,6 +436,9 @@ export class HttpSKaupatClient implements SKaupatClient {
     const errors = GraphQLErrorsSchema.safeParse(body);
     if (errors.success && errors.data.errors.length > 0) {
       const first = errors.data.errors[0];
+      if (authenticated && errors.data.errors.some((e) => AUTH_ERROR_CODES.includes(e.extensions?.code ?? ""))) {
+        throw new SKaupatError("session_expired", `S-kaupat did not accept the login for ${operationName}.`);
+      }
       const productError = errors.data.errors.find(isProductUnavailableError);
       if (productError) {
         throw new SKaupatError("product_unavailable", productError.message ?? "Product is not available.");
@@ -422,4 +572,77 @@ function mapStore(s: z.infer<typeof ApiStoreSchema>): Store {
     // domains is ["S_KAUPAT"] for some stores and [] for others; most likely online ordering (unconfirmed).
     onlineOrdering: s.domains ? s.domains.includes("S_KAUPAT") : null,
   };
+}
+
+const ListableProductsResponseSchema = z.object({
+  data: z.object({
+    store: z
+      .object({
+        products: z.object({
+          items: z.array(
+            ApiProductSchema.extend({ store: z.object({ sokId: z.string().nullish() }).passthrough().nullish() }),
+          ),
+        }),
+      })
+      .nullable(),
+  }),
+});
+
+const CheckBasketResponseSchema = z.object({
+  data: z.object({
+    validateCart: z.object({
+      cartValidationItems: z.array(
+        z
+          .object({
+            ean: z.string(),
+            labels: z.array(z.object({ labelText: z.string().nullish() }).passthrough()).nullish(),
+            validationError: z
+              .object({ __typename: z.string(), labelText: z.string().nullish() })
+              .passthrough()
+              .nullish(),
+          })
+          .passthrough(),
+      ),
+    }),
+  }),
+});
+
+const ApiListItemSchema = z
+  .object({
+    id: z.string(),
+    ean: z.string(),
+    name: z.string().nullish(),
+    quantity: z.number().nullish(),
+    isReplaceable: z.boolean().nullish(),
+    product: ApiProductSchema.nullish(),
+  })
+  .passthrough();
+
+const ApiListSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    createdAt: z.string().nullish(),
+    // Items are a union; members other than ShoppingListItem come back as {} and are skipped.
+    items: z.array(z.union([ApiListItemSchema, z.object({}).passthrough()])).nullish(),
+  })
+  .passthrough();
+
+function mapList(l: z.infer<typeof ApiListSchema>, storeId: string): ShoppingList {
+  const observedAt = new Date().toISOString();
+  const items: ShoppingListItem[] = [];
+  for (const raw of l.items ?? []) {
+    const item = ApiListItemSchema.safeParse(raw);
+    if (!item.success) continue;
+    const i = item.data;
+    items.push({
+      itemId: i.id,
+      productId: i.ean,
+      name: i.name ?? i.product?.name ?? i.ean,
+      quantity: i.quantity ?? 1,
+      allowSubstitutes: i.isReplaceable ?? false,
+      product: i.product ? mapProduct(i.product, storeId, observedAt) : null,
+    });
+  }
+  return { id: l.id, name: l.name, createdAt: l.createdAt ?? null, storeId, items };
 }

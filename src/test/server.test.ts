@@ -14,14 +14,19 @@ import { HttpSKaupatClient } from "../client/http-client.js";
 import { FileStoreSelection, type StoreSelection } from "../selection.js";
 import { createServer } from "../server.js";
 import type { SKaupatClient } from "../client/types.js";
+import type { ShoppingListApi } from "../lists/types.js";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "catalogue.json");
 
 async function connect(
   client: SKaupatClient = new FixtureSKaupatClient(fixtures),
-  { selection, auth = new FixtureAuth() }: { selection?: StoreSelection; auth?: SKaupatAuth } = {},
+  {
+    selection,
+    auth = new FixtureAuth(),
+    lists = client instanceof FixtureSKaupatClient ? client : undefined,
+  }: { selection?: StoreSelection; auth?: SKaupatAuth; lists?: ShoppingListApi } = {},
 ) {
-  const server = createServer(client, auth, { selection });
+  const server = createServer(client, auth, { selection, lists });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), mcp.connect(clientTransport)]);
@@ -33,13 +38,19 @@ async function call(mcp: Client, name: string, args: Record<string, unknown>) {
   return { isError: res.isError === true, data: res.structuredContent as any };
 }
 
-test("lists the catalogue, store selection and login tools", async () => {
+test("lists the catalogue, store, login and shopping list tools", async () => {
   const mcp = await connect();
   const { tools } = await mcp.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), [
+    "add_to_shopping_list",
+    "create_shopping_list",
+    "delete_shopping_list",
     "get_products",
     "get_selected_store",
+    "get_shopping_list",
+    "get_shopping_lists",
     "login_status",
+    "remove_from_shopping_list",
     "search_products",
     "search_stores",
     "select_store",

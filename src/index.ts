@@ -11,11 +11,12 @@ import type { SKaupatAuth } from "./auth/types.js";
 import { FixtureSKaupatClient } from "./client/fixture-client.js";
 import { HttpSKaupatClient } from "./client/http-client.js";
 import type { SKaupatClient } from "./client/types.js";
+import type { ShoppingListApi } from "./lists/types.js";
 import { log } from "./log.js";
 import { defaultSettingsPath, FileStoreSelection } from "./selection.js";
 import { createServer, SERVER_VERSION } from "./server.js";
 
-function createClient(): SKaupatClient {
+function createClient(): SKaupatClient & ShoppingListApi {
   const mode = process.env.SKAUPAT_MODE ?? "live";
   if (mode === "fixtures") {
     const here = dirname(fileURLToPath(import.meta.url));
@@ -43,7 +44,8 @@ function createAuth(): SKaupatAuth {
 
 async function main(): Promise<void> {
   const selection = new FileStoreSelection(process.env.SKAUPAT_SETTINGS_FILE ?? defaultSettingsPath());
-  const server = createServer(createClient(), createAuth(), { selection });
+  const client = createClient();
+  const server = createServer(client, createAuth(), { selection, lists: client });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info(`s-kaupat-mcp ${SERVER_VERSION} ready on stdio`);

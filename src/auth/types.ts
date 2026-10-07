@@ -34,4 +34,9 @@ export interface SKaupatAuth {
   startLogin(input: StartLoginInput): Promise<LoginResult>;
   /** A valid access token for authenticated calls; renews quietly. Throws login_required or session_expired. */
   getAccessToken(): Promise<string>;
+  /**
+   * Runs an authenticated call, renewing the access token once and retrying if
+   * S-kaupat rejects it. Optional; callers fall back to getAccessToken.
+   */
+  withAccessToken?<T>(fn: (accessToken: string) => Promise<T>): Promise<T>;
 }

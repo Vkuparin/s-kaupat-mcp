@@ -159,6 +159,30 @@ export interface GetProductsInput {
   ids: string[];
 }
 
+/** A product with the internal id S-kaupat needs to put it on a shopping list. */
+export interface ListableProduct {
+  product: Product;
+  /** S Group's internal product id (sokId); null if S-kaupat did not report one. */
+  sokId: string | null;
+}
+
+/**
+ * Whether one product can be ordered from a store, from S-kaupat's own cart check.
+ * - ok: no known problem.
+ * - unavailable: sold here but not orderable right now (e.g. out of stock).
+ * - not_in_store: a known product this store does not sell.
+ * - not_found: S-kaupat does not know the barcode.
+ * - unknown: the check returned nothing for this product.
+ */
+export type BasketCheckStatus = "ok" | "unavailable" | "not_in_store" | "not_found" | "unknown";
+
+export interface BasketCheck {
+  id: string;
+  status: BasketCheckStatus;
+  /** S-kaupat's own short label for the problem, in Finnish, when it gives one. */
+  label: string | null;
+}
+
 /**
  * The reusable retailer client. The MCP layer depends only on this interface,
  * so the transport (direct HTTP, managed browser, extension) can change after
@@ -170,4 +194,8 @@ export interface SKaupatClient {
   getStores(ids: string[]): Promise<Map<string, StoreDetails>>;
   searchProducts(input: SearchProductsInput): Promise<ProductSearchResult>;
   getProducts(input: GetProductsInput): Promise<ProductsResult>;
+  /** Products by EAN with their sokId, for list writes. Unknown or unsold EANs are missing from the map. */
+  getListableProducts(storeId: string, ids: string[]): Promise<Map<string, ListableProduct>>;
+  /** S-kaupat's anonymous cart check (validateCart) for these products and quantities in one store. */
+  checkBasket(storeId: string, items: { id: string; quantity: number }[]): Promise<Map<string, BasketCheck>>;
 }

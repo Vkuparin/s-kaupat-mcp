@@ -1,0 +1,128 @@
+{
+  "_note": "Captured live 2026-10-07. Trimmed: first 3 of 24 stores on the page, 2 services each.",
+  "request": {
+    "operationName": "RemoteStoreSearch",
+    "variables": {
+      "query": "Tampere",
+      "brand": null,
+      "cursor": null
+    },
+    "query": "query RemoteStoreSearch($query: String, $brand: StoreBrand, $cursor: String) { searchStores(query: $query, brand: $brand, cursor: $cursor) { totalCount cursor stores { __typename id name brand slug availablePaymentMethods domains services { __typename } location { __typename address { __typename postcodeName { default } postcode street { default } } coordinates { lat lon } } } } }"
+  },
+  "response": {
+    "data": {
+      "searchStores": {
+        "totalCount": 31,
+        "cursor": "<opaque base64 cursor, removed from sample>",
+        "stores": [
+          {
+            "__typename": "StoreInfo",
+            "id": "649107562",
+            "name": "ABC Lahdesjärvi Tampere",
+            "brand": "abc",
+            "slug": "abc-lahdesjarvi-tampere",
+            "availablePaymentMethods": null,
+            "domains": [
+              "S_KAUPAT"
+            ],
+            "services": [
+              {
+                "__typename": "StoreService"
+              },
+              {
+                "__typename": "StoreService"
+              }
+            ],
+            "location": {
+              "__typename": "StoreLocation",
+              "address": {
+                "__typename": "StoreAddress",
+                "postcodeName": {
+                  "default": "Tampere"
+                },
+                "postcode": "33840",
+                "street": {
+                  "default": "Automiehenkatu 39"
+                }
+              },
+              "coordinates": {
+                "lat": "61.459378",
+                "lon": "23.787731"
+              }
+            }
+          },
+          {
+            "__typename": "StoreInfo",
+            "id": "726413330",
+            "name": "Prisma Hämeenkatu Tampere",
+            "brand": "prisma",
+            "slug": "prisma-hameenkatu-tampere",
+            "availablePaymentMethods": null,
+            "domains": [],
+            "services": [
+              {
+                "__typename": "StoreService"
+              },
+              {
+                "__typename": "StoreService"
+              }
+            ],
+            "location": {
+              "__typename": "StoreLocation",
+              "address": {
+                "__typename": "StoreAddress",
+                "postcodeName": {
+                  "default": "Tampere"
+                },
+                "postcode": "33200",
+                "street": {
+                  "default": "Hämeenkatu 21"
+                }
+              },
+              "coordinates": {
+                "lat": "61.497417",
+                "lon": "23.757534"
+              }
+            }
+          },
+          {
+            "__typename": "StoreInfo",
+            "id": "517609418",
+            "name": "Prisma Kaleva Tampere",
+            "brand": "prisma",
+            "slug": "prisma-kaleva-tampere",
+            "availablePaymentMethods": null,
+            "domains": [
+              "S_KAUPAT"
+            ],
+            "services": [
+              {
+                "__typename": "StoreService"
+              },
+              {
+                "__typename": "StoreService"
+              }
+            ],
+            "location": {
+              "__typename": "StoreLocation",
+              "address": {
+                "__typename": "StoreAddress",
+                "postcodeName": {
+                  "default": "Tampere"
+                },
+                "postcode": "33540",
+                "street": {
+                  "default": "Sammonkatu 75"
+                }
+              },
+              "coordinates": {
+                "lat": "61.492234",
+                "lon": "23.819213"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

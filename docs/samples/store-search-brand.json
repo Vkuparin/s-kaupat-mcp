@@ -1,0 +1,50 @@
+{
+  "_note": "Captured live 2026-10-07. Trimmed: first 3 of 24 stores.",
+  "request": {
+    "operationName": "RemoteStoreSearch",
+    "variables": {
+      "query": null,
+      "cursor": null
+    },
+    "query": "query RemoteStoreSearch($query: String, $cursor: String) { prisma: searchStores(query: $query, brand: PRISMA, cursor: $cursor) { totalCount cursor stores { id name brand slug domains } } all: searchStores(query: $query, cursor: $cursor) { totalCount cursor } }"
+  },
+  "response": {
+    "data": {
+      "prisma": {
+        "totalCount": 85,
+        "cursor": "<opaque base64 cursor, removed from sample>",
+        "stores": [
+          {
+            "id": "685839284",
+            "name": "Prisma Forssa",
+            "brand": "prisma",
+            "slug": "prisma-forssa",
+            "domains": [
+              "S_KAUPAT"
+            ]
+          },
+          {
+            "id": "613764729",
+            "name": "Prisma Halikko",
+            "brand": "prisma",
+            "slug": "prisma-halikko",
+            "domains": [
+              "S_KAUPAT"
+            ]
+          },
+          {
+            "id": "726823796",
+            "name": "Prisma Heinola",
+            "brand": "prisma",
+            "slug": "prisma-heinola",
+            "domains": []
+          }
+        ]
+      },
+      "all": {
+        "totalCount": 1048,
+        "cursor": "<opaque base64 cursor, removed from sample>"
+      }
+    }
+  }
+}

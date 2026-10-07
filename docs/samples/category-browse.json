@@ -1,0 +1,148 @@
+{
+  "_note": "Captured live 2026-10-07/08 with anonymous POST to https://api.s-kaupat.fi/. Trimmed where stated.",
+  "request": {
+    "operationName": "RemoteFilteredProducts",
+    "variables": {
+      "storeId": "517609418",
+      "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot",
+      "from": 0,
+      "limit": 3,
+      "orderBy": "price",
+      "order": "asc"
+    },
+    "query": "query RemoteFilteredProducts($storeId: ID!, $slug: String, $from: Int, $limit: Int, $orderBy: SortKey, $order: SortOrder) { store(id: $storeId) { id products(slug: $slug, from: $from, limit: $limit, orderBy: $orderBy, order: $order) { total from limit searchProvider structuredFacets { __typename key } productListItems { product { id ean name price brandName slug pricing { currentPrice comparisonPrice comparisonUnit campaignPrice regularPrice } hierarchyPath { id name slug } measurement { netWeight grossWeight pceApproxWeight } } } } } }"
+  },
+  "response": {
+    "data": {
+      "store": {
+        "id": "517609418",
+        "products": {
+          "total": 29,
+          "from": 0,
+          "limit": 3,
+          "searchProvider": "loop54",
+          "structuredFacets": [],
+          "productListItems": [
+            {
+              "product": {
+                "id": "6415712506032",
+                "ean": "6415712506032",
+                "name": "Kotimaista rasvaton maito 1l",
+                "price": 0.85,
+                "brandName": "Kotimaista",
+                "slug": "kotimaista-rasvaton-maito-1l",
+                "pricing": {
+                  "currentPrice": 0.85,
+                  "comparisonPrice": 0.85,
+                  "comparisonUnit": "LTR",
+                  "campaignPrice": null,
+                  "regularPrice": 0.85
+                },
+                "hierarchyPath": [
+                  {
+                    "id": "1591691235495235",
+                    "name": "Maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+                  },
+                  {
+                    "id": "Herkku_00000122",
+                    "name": "Maidot ja piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+                  },
+                  {
+                    "id": "Herkku_00000006",
+                    "name": "Maito, munat ja rasvat",
+                    "slug": "maito-munat-ja-rasvat"
+                  }
+                ],
+                "measurement": {
+                  "netWeight": 1.036,
+                  "grossWeight": 1.062,
+                  "pceApproxWeight": null
+                }
+              }
+            },
+            {
+              "product": {
+                "id": "6408430000432",
+                "ean": "6408430000432",
+                "name": "Valio Hyvä suomalainen Arki® rasvaton maitojuoma 1 l",
+                "price": 0.85,
+                "brandName": "Valio Arki",
+                "slug": "valio-hyva-suomalainen-arkir-rasvaton-maitojuoma-1-l",
+                "pricing": {
+                  "currentPrice": 0.85,
+                  "comparisonPrice": 0.85,
+                  "comparisonUnit": "LTR",
+                  "campaignPrice": null,
+                  "regularPrice": 0.85
+                },
+                "hierarchyPath": [
+                  {
+                    "id": "1591691235495235",
+                    "name": "Maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+                  },
+                  {
+                    "id": "Herkku_00000122",
+                    "name": "Maidot ja piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+                  },
+                  {
+                    "id": "Herkku_00000006",
+                    "name": "Maito, munat ja rasvat",
+                    "slug": "maito-munat-ja-rasvat"
+                  }
+                ],
+                "measurement": {
+                  "netWeight": 1.032,
+                  "grossWeight": 1.0577,
+                  "pceApproxWeight": null
+                }
+              }
+            },
+            {
+              "product": {
+                "id": "6414893386488",
+                "ean": "6414893386488",
+                "name": "Kotimaista kevytmaito 1 L",
+                "price": 0.95,
+                "brandName": "Kotimaista",
+                "slug": "kotimaista-kevytmaito-1-l",
+                "pricing": {
+                  "currentPrice": 0.95,
+                  "comparisonPrice": 0.95,
+                  "comparisonUnit": "LTR",
+                  "campaignPrice": null,
+                  "regularPrice": 0.95
+                },
+                "hierarchyPath": [
+                  {
+                    "id": "1591691235495235",
+                    "name": "Maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+                  },
+                  {
+                    "id": "Herkku_00000122",
+                    "name": "Maidot ja piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+                  },
+                  {
+                    "id": "Herkku_00000006",
+                    "name": "Maito, munat ja rasvat",
+                    "slug": "maito-munat-ja-rasvat"
+                  }
+                ],
+                "measurement": {
+                  "netWeight": 1.032,
+                  "grossWeight": 1.057,
+                  "pceApproxWeight": null
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -159,6 +159,67 @@ export interface GetProductsInput {
   ids: string[];
 }
 
+export type AllergenLevel = "contains" | "may_contain" | "free_from" | "unknown";
+
+export interface Allergen {
+  /** S-kaupat's allergen code, e.g. "AM" (milk), "ML" (lactose). */
+  code: string;
+  /** Finnish name, e.g. "Maito". */
+  name: string | null;
+  level: AllergenLevel;
+}
+
+export interface Nutrient {
+  /** Finnish name as S-kaupat gives it, e.g. "Energia", "- josta sokereita". */
+  name: string;
+  /** Amount per 100 g or 100 ml as S-kaupat formats it, e.g. "1,5 g", "196 kJ / 47 kcal". */
+  value: string | null;
+  /** Share of the reference intake, e.g. "2,14%", when given. */
+  referenceIntake: string | null;
+  /** Kilocalories, only on the energy row. */
+  kcal: number | null;
+}
+
+/** Everything search returns plus the product page details. */
+export interface ProductDetails extends Product {
+  description: string | null;
+  ingredients: string | null;
+  allergens: Allergen[];
+  /** Per 100 g or 100 ml, in the order S-kaupat lists them. */
+  nutrients: Nutrient[];
+  countryOfOrigin: string | null;
+  supplier: string | null;
+  /** Net weight in kilograms as S-kaupat reports it (a 1 l carton of milk reports 1.036). */
+  netWeightKg: number | null;
+}
+
+export interface Category {
+  id: string;
+  /** Finnish name, e.g. "Maito, munat ja rasvat". */
+  name: string;
+  /** Full path, for browse_category, e.g. "maito-munat-ja-rasvat/maidot-ja-piimat". */
+  slug: string;
+  children: Category[];
+}
+
+export interface BrowseCategoryInput {
+  storeId: string;
+  slug: string;
+  limit: number;
+  offset?: number;
+  sort?: ProductSort;
+}
+
+export interface CategoryProductsResult {
+  storeId: string;
+  slug: string;
+  total: number | null;
+  offset: number;
+  sort: ProductSort;
+  products: Product[];
+  observedAt: string;
+}
+
 /** A product with the internal id S-kaupat needs to put it on a shopping list. */
 export interface ListableProduct {
   product: Product;
@@ -194,6 +255,11 @@ export interface SKaupatClient {
   getStores(ids: string[]): Promise<Map<string, StoreDetails>>;
   searchProducts(input: SearchProductsInput): Promise<ProductSearchResult>;
   getProducts(input: GetProductsInput): Promise<ProductsResult>;
+  /** Product page details in one store; null when the store does not know the product. */
+  getProductDetails(storeId: string, id: string): Promise<ProductDetails | null>;
+  /** The store's category tree (three levels). */
+  getCategories(storeId: string): Promise<Category[]>;
+  browseCategory(input: BrowseCategoryInput): Promise<CategoryProductsResult>;
   /** Products by EAN with their sokId, for list writes. Unknown or unsold EANs are missing from the map. */
   getListableProducts(storeId: string, ids: string[]): Promise<Map<string, ListableProduct>>;
   /** S-kaupat's anonymous cart check (validateCart) for these products and quantities in one store. */

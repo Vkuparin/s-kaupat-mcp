@@ -4,6 +4,10 @@ import type { ListItemInput, ShoppingList, ShoppingListApi } from "../lists/type
 import { finnishDate } from "../stores.js";
 import type {
   BasketCheck,
+  BrowseCategoryInput,
+  Category,
+  CategoryProductsResult,
+  ProductDetails,
   GetProductsInput,
   ListableProduct,
   Product,
@@ -34,8 +38,11 @@ type FixtureHours = "ALL_DAY" | "CLOSED" | { open: string; close: string };
 interface Catalogue {
   stores: (Store & { hours?: FixtureHours })[];
   /** `sokId` is S Group's internal id (needed for list writes); `orderable: false` makes the cart check report it unavailable. */
-  products: (FixtureProduct & { sokId?: string; orderable?: boolean })[];
+  products: (FixtureProduct & { sokId?: string; orderable?: boolean; details?: Partial<ProductDetailFields> })[];
+  categories?: Category[];
 }
+
+type ProductDetailFields = Omit<ProductDetails, keyof Product>;
 
 /**
  * Offline client backed by a JSON catalogue. Used for tests and for trying the
@@ -101,6 +108,47 @@ export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi {
           ? { id, status: "found" as const, product: this.toProduct(p, storeId, observedAt) }
           : { id, status: "not_found" as const, reason: "Not in the fixture catalogue." };
       }),
+    };
+  }
+
+  async getProductDetails(storeId: string, id: string): Promise<ProductDetails | null> {
+    this.requireStore(storeId);
+    const p = this.catalogue.products.find((x) => x.id === id);
+    if (!p) return null;
+    return {
+      ...this.toProduct(p, storeId, new Date().toISOString()),
+      description: null,
+      ingredients: null,
+      allergens: [],
+      nutrients: [],
+      countryOfOrigin: null,
+      supplier: null,
+      netWeightKg: null,
+      ...p.details,
+    };
+  }
+
+  async getCategories(storeId: string): Promise<Category[]> {
+    this.requireStore(storeId);
+    return this.catalogue.categories ?? [];
+  }
+
+  async browseCategory({ storeId, slug, limit, offset = 0, sort = "relevance" }: BrowseCategoryInput): Promise<CategoryProductsResult> {
+    this.requireStore(storeId);
+    const observedAt = new Date().toISOString();
+    // A category includes its subcategories' products (assumed to match the site; only leaf categories were browsed live).
+    const matches = sortProducts(
+      this.catalogue.products.filter((p) => p.categorySlug === slug || p.categorySlug?.startsWith(`${slug}/`)),
+      sort,
+    );
+    return {
+      storeId,
+      slug,
+      total: matches.length,
+      offset,
+      sort,
+      products: matches.slice(offset, offset + limit).map((p) => this.toProduct(p, storeId, observedAt)),
+      observedAt,
     };
   }
 
@@ -192,7 +240,7 @@ export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi {
   }
 
   private toProduct(entry: Catalogue["products"][number], storeId: string, observedAt: string): Product {
-    const { sokId: _sokId, orderable: _orderable, ...p } = entry;
+    const { sokId: _sokId, orderable: _orderable, details: _details, ...p } = entry;
     return {
       regularPrice: p.price,
       campaignValidUntil: null,

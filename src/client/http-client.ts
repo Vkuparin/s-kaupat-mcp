@@ -4,10 +4,16 @@ import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi, ShoppingListItem } from "../lists/types.js";
 import type {
+  Allergen,
+  AllergenLevel,
   BasketCheck,
+  BrowseCategoryInput,
+  Category,
+  CategoryProductsResult,
   GetProductsInput,
   ListableProduct,
   Product,
+  ProductDetails,
   ProductLookup,
   ProductSearchResult,
   ProductSort,
@@ -65,6 +71,30 @@ const PRODUCT_LIST_QUERY = `query RemoteFilteredProducts($storeId: ID!, $querySt
     }
   }
 }`;
+
+const CATEGORY_PRODUCTS_QUERY = `query RemoteFilteredProducts($storeId: ID!, $slug: String, $from: Int, $limit: Int, $orderBy: SortKey, $order: SortOrder) {
+  store(id: $storeId) { id
+    products(slug: $slug, from: $from, limit: $limit, orderBy: $orderBy, order: $order) {
+      total productListItems { product { ${PRODUCT_FIELDS} } }
+    }
+  }
+}`;
+
+/** Product page fields on top of PRODUCT_FIELDS (all seen in docs/samples/product-detail.json and category-browse.json). */
+const PRODUCT_DETAIL_QUERY = `query RemoteProductInfo($id: ID!, $storeId: ID!) {
+  product(id: $id, storeId: $storeId) { ${PRODUCT_FIELDS}
+    description ingredientStatement supplierName countryName { fi }
+    nutrients { name value ri kcal } allergens { allergenTypeCode allergenTypeText levelOfContainmentCode }
+    measurement { netWeight }
+  }
+}`;
+
+const NAVIGATION_QUERY = `query RemoteNavigation($id: ID!) {
+  store(id: $id) { id navigation { id name slug children { id name slug children { id name slug } } } }
+}`;
+
+/** The category tree is about 160 KB per store and changes rarely. */
+const CATEGORY_CACHE_MS = 6 * 60 * 60_000;
 
 const PRODUCTS_BY_EAN_QUERY = `query RemoteProductsByEans($storeId: ID!, $eans: [String!]) {
   store(id: $storeId) { id
@@ -183,6 +213,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
   private readonly origin: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  private readonly categoryCache = new Map<string, { categories: Category[]; until: number }>();
 
   constructor(private readonly options: HttpClientOptions = {}) {
     this.apiUrl = options.apiUrl ?? "https://api.s-kaupat.fi/";
@@ -269,6 +300,43 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
         : { id, status: "not_found", reason: "Not sold in this store, or not a known barcode." };
     });
     return { storeId, results, observedAt };
+  }
+
+  async getProductDetails(storeId: string, id: string): Promise<ProductDetails | null> {
+    const raw = await this.post("RemoteProductInfo", PRODUCT_DETAIL_QUERY, { id, storeId });
+    const parsed = ProductDetailResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected product detail response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected product response.");
+    }
+    const p = parsed.data.data.product;
+    return p ? mapProductDetails(p, storeId, new Date().toISOString()) : null;
+  }
+
+  async getCategories(storeId: string): Promise<Category[]> {
+    const cached = this.categoryCache.get(storeId);
+    if (cached && cached.until > Date.now()) return cached.categories;
+    const raw = await this.post("RemoteNavigation", NAVIGATION_QUERY, { id: storeId });
+    const parsed = NavigationResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected category response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected category response.");
+    }
+    const store = parsed.data.data.store;
+    if (!store) throw storeNotFound(storeId);
+    const categories = (store.navigation ?? []).map(mapCategory);
+    this.categoryCache.set(storeId, { categories, until: Date.now() + CATEGORY_CACHE_MS });
+    return categories;
+  }
+
+  async browseCategory({ storeId, slug, limit, offset = 0, sort = "relevance" }: BrowseCategoryInput): Promise<CategoryProductsResult> {
+    const { products, total, observedAt } = await this.listProducts(storeId, "RemoteFilteredProducts", CATEGORY_PRODUCTS_QUERY, {
+      slug,
+      from: offset,
+      limit,
+      ...SORTS[sort],
+    });
+    return { storeId, slug, total, offset, sort, products, observedAt };
   }
 
   async getListableProducts(storeId: string, ids: string[]): Promise<Map<string, ListableProduct>> {
@@ -645,4 +713,82 @@ function mapList(l: z.infer<typeof ApiListSchema>, storeId: string): ShoppingLis
     });
   }
   return { id: l.id, name: l.name, createdAt: l.createdAt ?? null, storeId, items };
+}
+
+const ApiProductDetailSchema = ApiProductSchema.extend({
+  description: z.string().nullish(),
+  ingredientStatement: z.string().nullish(),
+  supplierName: z.string().nullish(),
+  countryName: z.object({ fi: z.string().nullish() }).passthrough().nullish(),
+  nutrients: z
+    .array(
+      z
+        .object({ name: z.string(), value: z.string().nullish(), ri: z.string().nullish(), kcal: z.number().nullish() })
+        .passthrough(),
+    )
+    .nullish(),
+  allergens: z
+    .array(
+      z
+        .object({
+          allergenTypeCode: z.string(),
+          allergenTypeText: z.string().nullish(),
+          levelOfContainmentCode: z.string().nullish(),
+        })
+        .passthrough(),
+    )
+    .nullish(),
+  measurement: z.object({ netWeight: z.number().nullish() }).passthrough().nullish(),
+});
+
+const ProductDetailResponseSchema = z.object({ data: z.object({ product: ApiProductDetailSchema.nullable() }) });
+
+interface ApiCategory {
+  id: string;
+  name: string;
+  slug: string;
+  children?: ApiCategory[] | null;
+}
+
+const ApiCategorySchema: z.ZodType<ApiCategory> = z.lazy(() =>
+  z.object({ id: z.string(), name: z.string(), slug: z.string(), children: z.array(ApiCategorySchema).nullish() }),
+);
+
+const NavigationResponseSchema = z.object({
+  data: z.object({ store: z.object({ navigation: z.array(ApiCategorySchema).nullish() }).passthrough().nullable() }),
+});
+
+function mapCategory(c: ApiCategory): Category {
+  return { id: c.id, name: c.name, slug: c.slug, children: (c.children ?? []).map(mapCategory) };
+}
+
+/** GS1 levelOfContainment codes; only CONTAINS has been seen live. */
+const ALLERGEN_LEVELS: Record<string, AllergenLevel> = {
+  CONTAINS: "contains",
+  MAY_CONTAIN: "may_contain",
+  FREE_FROM: "free_from",
+};
+
+function mapProductDetails(p: z.infer<typeof ApiProductDetailSchema>, storeId: string, observedAt: string): ProductDetails {
+  return {
+    ...mapProduct(p, storeId, observedAt),
+    description: p.description ?? null,
+    ingredients: p.ingredientStatement ?? null,
+    allergens: (p.allergens ?? []).map(
+      (a): Allergen => ({
+        code: a.allergenTypeCode,
+        name: a.allergenTypeText ?? null,
+        level: ALLERGEN_LEVELS[a.levelOfContainmentCode?.toUpperCase() ?? ""] ?? "unknown",
+      }),
+    ),
+    nutrients: (p.nutrients ?? []).map((n) => ({
+      name: n.name,
+      value: n.value ?? null,
+      referenceIntake: n.ri ?? null,
+      kcal: n.kcal ?? null,
+    })),
+    countryOfOrigin: p.countryName?.fi ?? null,
+    supplier: p.supplierName ?? null,
+    netWeightKg: p.measurement?.netWeight ?? null,
+  };
 }

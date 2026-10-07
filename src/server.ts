@@ -6,7 +6,7 @@ import { addItemsToList, type ListWriteResult, type WithToken } from "./lists/se
 import type { ShoppingList, ShoppingListApi } from "./lists/types.js";
 import { log } from "./log.js";
 import type { SKaupatAuth } from "./auth/types.js";
-import { PRODUCT_SORTS, STORE_CHAINS, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
+import { PRODUCT_SORTS, STORE_CHAINS, type Category, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
 import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./selection.js";
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
 
@@ -225,6 +225,100 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       }),
   );
 
+  server.registerTool(
+    "get_product_details",
+    {
+      title: "Get S-kaupat product details",
+      description:
+        "The product page for one product in the user's store: everything search_products returns plus " +
+        "description, ingredients, allergens (contains, may_contain or free_from), nutrition per 100 g or 100 ml, " +
+        "country of origin, supplier and net weight. Texts are in Finnish as S-kaupat gives them. Fails with " +
+        "product_unavailable when the store does not know the product.",
+      inputSchema: {
+        productId: z.string().min(1).describe("Product ID (EAN) from search_products or browse_category."),
+        storeId,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ productId, storeId }) =>
+      run("get_product_details", async () => {
+        const store = resolveStoreId(storeId);
+        const product = await client.getProductDetails(store, productId);
+        if (!product) {
+          throw new SKaupatError("product_unavailable", `Product ${productId} was not found in store ${store}.`, {
+            productId,
+          });
+        }
+        return { product };
+      }),
+  );
+
+  server.registerTool(
+    "list_categories",
+    {
+      title: "List S-kaupat product categories",
+      description:
+        "The store's product categories in Finnish, for a category menu. Without parent, returns the top level; " +
+        "with parent (a category slug), returns that category's subcategories. Each category has a slug for " +
+        "browse_category and a childCount. The tree has three levels.",
+      inputSchema: {
+        storeId,
+        parent: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("Slug of the category whose subcategories to list, e.g. 'maito-munat-ja-rasvat'."),
+        depth: z
+          .number()
+          .int()
+          .min(1)
+          .max(3)
+          .default(1)
+          .describe("How many levels to include below the starting point."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ storeId, parent, depth }) =>
+      run("list_categories", async () => {
+        const store = resolveStoreId(storeId);
+        const tree = await client.getCategories(store);
+        let level = tree;
+        let parentCategory: Category | null = null;
+        if (parent) {
+          parentCategory = findCategory(tree, parent);
+          if (!parentCategory) {
+            throw new SKaupatError("invalid_argument", `No category with slug ${parent} in store ${store}.`, { parent });
+          }
+          level = parentCategory.children;
+        }
+        return {
+          storeId: store,
+          parent: parentCategory ? { id: parentCategory.id, name: parentCategory.name, slug: parentCategory.slug } : null,
+          categories: level.map((c) => categoryView(c, depth)),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "browse_category",
+    {
+      title: "Browse an S-kaupat category",
+      description:
+        "Products in one category of the user's store (slug from list_categories, or a product's categorySlug), " +
+        "with the same product fields as search_products. Use offset to page and sort for cheapest first.",
+      inputSchema: {
+        storeId,
+        slug: z.string().min(1).describe("Category slug, e.g. 'maito-munat-ja-rasvat/maidot-ja-piimat/maidot'."),
+        limit: z.number().int().min(1).max(50).default(20).describe("Maximum products to return."),
+        offset: z.number().int().min(0).max(1000).default(0).describe("Products to skip, for the next page."),
+        sort: z.enum(PRODUCT_SORTS).default("relevance").describe("relevance, price_asc or price_desc."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ storeId, slug, limit, offset, sort }) =>
+      run("browse_category", () => client.browseCategory({ storeId: resolveStoreId(storeId), slug, limit, offset, sort })),
+  );
+
   const withToken: WithToken = (fn) => (auth.withAccessToken ? auth.withAccessToken(fn) : auth.getAccessToken().then(fn));
   const requireLists = (): ShoppingListApi => {
     if (!options.lists) throw new SKaupatError("unsupported", "Shopping lists are not available in this server.");
@@ -406,6 +500,33 @@ const LOGIN_MESSAGES = {
   cancelled: { fi: "Kirjautuminen keskeytettiin.", en: "Login was cancelled." },
   timed_out: { fi: "Kirjautuminen aikakatkaistiin. Yritä uudelleen.", en: "Login timed out. Please try again." },
 };
+
+function findCategory(tree: Category[], slug: string): Category | null {
+  for (const c of tree) {
+    if (c.slug === slug) return c;
+    const found = findCategory(c.children, slug);
+    if (found) return found;
+  }
+  return null;
+}
+
+interface CategoryView {
+  id: string;
+  name: string;
+  slug: string;
+  childCount: number;
+  children?: CategoryView[];
+}
+
+function categoryView(c: Category, depth: number): CategoryView {
+  return {
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    childCount: c.children.length,
+    ...(depth > 1 ? { children: c.children.map((child) => categoryView(child, depth - 1)) } : {}),
+  };
+}
 
 /** Where the user finishes: the site turns a list into a cart with one button. */
 const LIST_NEXT_STEP = {

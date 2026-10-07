@@ -43,12 +43,15 @@ test("lists the catalogue, store, login and shopping list tools", async () => {
   const { tools } = await mcp.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), [
     "add_to_shopping_list",
+    "browse_category",
     "create_shopping_list",
     "delete_shopping_list",
+    "get_product_details",
     "get_products",
     "get_selected_store",
     "get_shopping_list",
     "get_shopping_lists",
+    "list_categories",
     "login_status",
     "remove_from_shopping_list",
     "search_products",
@@ -236,4 +239,58 @@ test("auth errors reach the caller with code and Finnish and English messages", 
   assert.equal(isError, true);
   assert.equal(data.error.code, "login_window_unavailable");
   assert.equal(data.error.userMessage.fi, "Kirjautumisikkunaa ei voitu avata tällä laitteella.");
+});
+
+test("get_product_details returns allergens and nutrition", async () => {
+  const mcp = await connect();
+  const { isError, data } = await call(mcp, "get_product_details", { storeId: "fixture-store-1", productId: "0000000000017" });
+  assert.equal(isError, false);
+  assert.equal(data.product.name, "Kevytmaito 1 l");
+  assert.equal(data.product.price, 1.09);
+  assert.deepEqual(data.product.allergens[0], { code: "AM", name: "Maito", level: "contains" });
+  assert.equal(data.product.nutrients[0].kcal, 47);
+  const bread = await call(mcp, "get_product_details", { storeId: "fixture-store-1", productId: "0000000000024" });
+  assert.deepEqual(bread.data.product.allergens, []);
+  assert.equal(bread.data.product.ingredients, null);
+});
+
+test("get_product_details of an unknown product is product_unavailable", async () => {
+  const mcp = await connect();
+  const { isError, data } = await call(mcp, "get_product_details", { storeId: "fixture-store-1", productId: "nope" });
+  assert.equal(isError, true);
+  assert.equal(data.error.code, "product_unavailable");
+  assert.equal(data.error.productId, "nope");
+});
+
+test("list_categories walks the tree level by level", async () => {
+  const mcp = await connect();
+  const top = await call(mcp, "list_categories", { storeId: "fixture-store-1" });
+  assert.equal(top.data.parent, null);
+  assert.deepEqual(
+    top.data.categories.map((c: any) => [c.slug, c.childCount, c.children]),
+    [
+      ["maito-munat-ja-rasvat", 2, undefined],
+      ["leivat-keksit-ja-leivonnaiset", 1, undefined],
+      ["hedelmat-ja-vihannekset", 1, undefined],
+    ],
+  );
+  const dairy = await call(mcp, "list_categories", { storeId: "fixture-store-1", parent: "maito-munat-ja-rasvat", depth: 2 });
+  assert.equal(dairy.data.parent.name, "Maito, munat ja rasvat");
+  assert.equal(dairy.data.categories[0].children[0].slug, "maito-munat-ja-rasvat/maidot-ja-piimat/maidot");
+  const bad = await call(mcp, "list_categories", { storeId: "fixture-store-1", parent: "nope" });
+  assert.equal(bad.data.error.code, "invalid_argument");
+});
+
+test("browse_category pages through a category, cheapest first", async () => {
+  const mcp = await connect();
+  const { data } = await call(mcp, "browse_category", {
+    storeId: "fixture-store-1",
+    slug: "maito-munat-ja-rasvat",
+    sort: "price_asc",
+    limit: 2,
+  });
+  assert.equal(data.total, 3);
+  assert.deepEqual(data.products.map((p: any) => p.price), [0.69, 1.09]);
+  const next = await call(mcp, "browse_category", { storeId: "fixture-store-1", slug: "maito-munat-ja-rasvat", sort: "price_asc", limit: 2, offset: 2 });
+  assert.deepEqual(next.data.products.map((p: any) => p.price), [1.39]);
 });

@@ -181,3 +181,70 @@ test("S-kaupat product errors become product_unavailable", async () => {
     (e: SKaupatError) => e.code === "product_unavailable" && e.userMessage.en === "This product is not available in this store.",
   );
 });
+
+test("product details map the captured product page sample", async () => {
+  const bodies: any[] = [];
+  const client = new HttpSKaupatClient({ fetchImpl: fakeFetch(docSample("product-detail.json"), 200, [], bodies) });
+  const p = await client.getProductDetails("517609418", "6414893386488");
+  assert.deepEqual(bodies[0].variables, { id: "6414893386488", storeId: "517609418" });
+  assert.equal(p?.name, "Kotimaista kevytmaito 1 L");
+  assert.equal(p?.ingredients, "KEVYTMAITO ja D-vitamiini. Maidon alkuperämaa Suomi.");
+  assert.equal(p?.countryOfOrigin, "Suomi");
+  assert.equal(p?.supplier, "Arla Oy");
+  assert.deepEqual(p?.allergens, [
+    { code: "AM", name: "Maito", level: "contains" },
+    { code: "ML", name: "Laktoosi", level: "contains" },
+  ]);
+  assert.equal(p?.nutrients.length, 7);
+  assert.deepEqual(p?.nutrients[0], { name: "Energia", value: "196 kJ / 47 kcal", referenceIntake: "2,35%", kcal: 47 });
+  assert.equal(p?.netWeightKg, null);
+});
+
+test("an unknown product's details are null", async () => {
+  const client = new HttpSKaupatClient({ fetchImpl: fakeFetch({ data: { product: null } }) });
+  assert.equal(await client.getProductDetails("1", "2"), null);
+});
+
+test("categories map the captured tree and are cached per store", async () => {
+  let calls = 0;
+  // The sample trims most subtrees to "<trimmed: N children>"; serve those as empty.
+  const body = JSON.parse(JSON.stringify(docSample("store-info.json")), (key, value) =>
+    key === "children" && typeof value === "string" ? [] : value,
+  );
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response(JSON.stringify(body));
+  }) as unknown as typeof fetch;
+  const client = new HttpSKaupatClient({ fetchImpl });
+  const tree = await client.getCategories("517609418");
+  await client.getCategories("517609418");
+  assert.equal(calls, 1);
+  assert.equal(tree.length, 31);
+  const dairy = tree.find((c) => c.slug === "maito-munat-ja-rasvat")!;
+  assert.equal(dairy.name, "Maito, munat ja rasvat");
+  assert.ok(dairy.children.length > 0);
+  assert.ok(dairy.children[0]!.slug.startsWith("maito-munat-ja-rasvat/"));
+});
+
+test("browse_category sends the slug and maps the captured category sample", async () => {
+  const bodies: any[] = [];
+  const client = new HttpSKaupatClient({ fetchImpl: fakeFetch(docSample("category-browse.json"), 200, [], bodies) });
+  const res = await client.browseCategory({
+    storeId: "517609418",
+    slug: "maito-munat-ja-rasvat/maidot-ja-piimat/maidot",
+    limit: 3,
+    sort: "price_asc",
+  });
+  assert.match(bodies[0].query, /products\(slug: \$slug/);
+  assert.deepEqual(bodies[0].variables, {
+    storeId: "517609418",
+    slug: "maito-munat-ja-rasvat/maidot-ja-piimat/maidot",
+    from: 0,
+    limit: 3,
+    orderBy: "price",
+    order: "asc",
+  });
+  assert.equal(res.total, 29);
+  assert.equal(res.products[0]?.name, "Kotimaista rasvaton maito 1l");
+  assert.equal(res.products[0]?.category, "Maidot");
+});

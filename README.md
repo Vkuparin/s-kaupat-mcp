@@ -1,6 +1,6 @@
 # s-kaupat-mcp
 
-An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search products, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
+An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
 Status: **early (v0.2.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
@@ -13,6 +13,9 @@ Status: **early (v0.2.0)**. Catalogue, store-selection, login and shopping list 
 | `get_selected_store` | none | The saved store with opening hours, or `selectedStore: null` when none is chosen yet |
 | `search_products` | `storeId` (optional), `query`, `limit`, `offset`, `sort` (`relevance`, `price_asc`, `price_desc`) | Products in that store: ID (EAN), name, brand, price, regular and campaign price, comparison price and unit, category, labels, shelf location, image URL, observation time |
 | `get_products` | `storeId` (optional), `ids[]` (EANs) | One result per ID, from one request: `found` with the product, or `not_found` (not sold in that store, or unknown barcode) |
+| `get_product_details` | `productId`, `storeId` (optional) | The product page: everything above plus description, ingredients, allergens (`contains`, `may_contain`, `free_from`), nutrition per 100 g/ml, country of origin, supplier, net weight |
+| `list_categories` | `storeId` (optional), `parent` (slug, optional), `depth` (1 to 3) | Category menu in Finnish: `id`, `name`, `slug`, `childCount`, optionally `children` |
+| `browse_category` | `slug`, `storeId` (optional), `limit`, `offset`, `sort` | Products in that category, same fields as `search_products` |
 | `login_status` | none | `logged_in` (with the account holder's first name), `logged_out` or `expired`. Never opens a window |
 | `start_login` | `timeoutSeconds` (30 to 900, default 300) | Opens the server's own small login window and waits: `logged_in`, `cancelled` or `timed_out`, each with a Finnish and English message |
 | `get_shopping_lists` | `storeId` (optional) | The user's lists with items, current prices and an estimated total. Needs login |
@@ -225,4 +228,4 @@ The MCP layer depends only on the `SKaupatClient` interface, so the transport ch
 
 ## Not included yet
 
-Product detail, categories and packaged releases. Order placement and payment are deliberately left out. See the plan.
+Packaged releases. Order placement and payment are deliberately left out. See the plan.

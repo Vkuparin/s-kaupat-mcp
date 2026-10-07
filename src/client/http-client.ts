@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SKaupatError } from "../errors.js";
+import { SKaupatError, storeNotFound } from "../errors.js";
 import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type {
@@ -7,6 +7,7 @@ import type {
   Product,
   ProductLookup,
   ProductSearchResult,
+  ProductSort,
   ProductsResult,
   SearchProductsInput,
   SearchStoresInput,
@@ -20,24 +21,17 @@ import type {
  * Direct HTTP client for S-kaupat's public catalogue API.
  *
  * The API accepts this client's own GraphQL query text without login (live-
- * verified 2026-10-07, see docs/s-kaupat-api.md). Store queries use that.
- * Product search still uses the website's persisted query hash and moves to
- * own query text separately. Store response shapes follow the captured samples
- * in docs/samples; product parsing is still unverified against live traffic.
+ * verified 2026-10-07, see docs/s-kaupat-api.md), so every call sends its own
+ * query and no persisted-query hashes are needed. Response shapes follow the
+ * captured samples in docs/samples.
  */
 
 export interface HttpClientOptions {
   apiUrl?: string;
   origin?: string;
   timeoutMs?: number;
-  /** Persisted query hash for the product search operation. */
-  productSearchHash?: string;
   fetchImpl?: typeof fetch;
 }
-
-const OPERATIONS = {
-  productSearch: "RemoteFilteredProducts",
-} as const;
 
 /** searchStores returns 24 stores per page. Cap paging so one call stays a few requests. */
 const STORE_PAGE_SIZE = 24;
@@ -53,13 +47,45 @@ const STORE_SEARCH_QUERY = `query RemoteStoreSearch($query: String, $brand: Stor
 
 const STORE_DETAIL_FIELDS = "id name brand weeklyOpeningHours { openingTimes { date day mode ranges { open close } } }";
 
+/** Product fields shared by search, category browsing and lookups by EAN (all seen in docs/samples). */
+const PRODUCT_FIELDS =
+  "id ean name price brandName approxPrice priceUnit isAgeLimitedByAlcohol frozen packagingLabels " +
+  "availability { label date } location { aisle shelf } hierarchyPath { id name slug } " +
+  "pricing { currentPrice regularPrice campaignPrice campaignPriceValidUntil lowest30DayPrice comparisonPrice " +
+  "comparisonUnit depositPrice isApproximatePrice } " +
+  "productDetails { productImages { mainImage { urlTemplate } } }";
+
+const PRODUCT_LIST_QUERY = `query RemoteFilteredProducts($storeId: ID!, $queryString: String, $from: Int, $limit: Int, $orderBy: SortKey, $order: SortOrder) {
+  store(id: $storeId) { id
+    products(queryString: $queryString, from: $from, limit: $limit, orderBy: $orderBy, order: $order) {
+      total productListItems { product { ${PRODUCT_FIELDS} } }
+    }
+  }
+}`;
+
+const PRODUCTS_BY_EAN_QUERY = `query RemoteProductsByEans($storeId: ID!, $eans: [String!], $limit: Int) {
+  store(id: $storeId) { id
+    products(eans: $eans, limit: $limit) { total productListItems { product { ${PRODUCT_FIELDS} } } }
+  }
+}`;
+
+const SORTS: Record<ProductSort, { orderBy?: string; order?: string }> = {
+  relevance: {},
+  price_asc: { orderBy: "price", order: "asc" },
+  price_desc: { orderBy: "price", order: "desc" },
+};
+
 const PricingSchema = z
   .object({
     currentPrice: z.number().nullish(),
     regularPrice: z.number().nullish(),
     campaignPrice: z.number().nullish(),
+    campaignPriceValidUntil: z.string().nullish(),
+    lowest30DayPrice: z.number().nullish(),
     comparisonPrice: z.number().nullish(),
     comparisonUnit: z.string().nullish(),
+    depositPrice: z.number().nullish(),
+    isApproximatePrice: z.boolean().nullish(),
   })
   .passthrough();
 
@@ -71,8 +97,15 @@ const ApiProductSchema = z
     brandName: z.string().nullish(),
     priceUnit: z.string().nullish(),
     approxPrice: z.boolean().nullish(),
+    isAgeLimitedByAlcohol: z.boolean().nullish(),
+    frozen: z.boolean().nullish(),
+    packagingLabels: z.array(z.string()).nullish(),
+    location: z
+      .object({ aisle: z.coerce.string().nullish(), shelf: z.coerce.string().nullish() })
+      .passthrough()
+      .nullish(),
     pricing: PricingSchema.nullish(),
-    hierarchyPath: z.array(z.object({ name: z.string() }).passthrough()).nullish(),
+    hierarchyPath: z.array(z.object({ name: z.string(), slug: z.string().nullish() }).passthrough()).nullish(),
     productDetails: z
       .object({
         productImages: z
@@ -85,7 +118,7 @@ const ApiProductSchema = z
   })
   .passthrough();
 
-const ProductSearchResponseSchema = z.object({
+const ProductListResponseSchema = z.object({
   data: z.object({
     store: z
       .object({
@@ -174,81 +207,55 @@ export class HttpSKaupatClient implements SKaupatClient {
     return found;
   }
 
-  async searchProducts({ storeId, query, limit }: SearchProductsInput): Promise<ProductSearchResult> {
-    const hash = this.requireHash(
-      this.options.productSearchHash,
-      "SKAUPAT_PRODUCT_SEARCH_HASH",
-      OPERATIONS.productSearch,
-    );
-    const raw = await this.query(OPERATIONS.productSearch, hash, {
+  async searchProducts({ storeId, query, limit, offset = 0, sort = "relevance" }: SearchProductsInput): Promise<ProductSearchResult> {
+    const { products, total, observedAt } = await this.listProducts(storeId, "RemoteFilteredProducts", PRODUCT_LIST_QUERY, {
       queryString: query,
-      storeId,
-      from: 0,
+      from: offset,
       limit,
+      ...SORTS[sort],
     });
-    const observedAt = new Date().toISOString();
-    const parsed = ProductSearchResponseSchema.safeParse(raw);
-    if (!parsed.success) {
-      log.warn("Unexpected product search response", { issues: parsed.error.issues.slice(0, 3) });
-      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected product search response.");
-    }
-    const store = parsed.data.data.store;
-    if (!store) {
-      throw new SKaupatError("unavailable", `Store ${storeId} was not found.`, { storeId });
-    }
-    return {
-      storeId,
-      query,
-      total: store.products.total ?? null,
-      products: store.products.productListItems.map((item) => mapProduct(item.product, storeId, observedAt)),
-      observedAt,
-    };
+    return { storeId, query, total, offset, sort, products, observedAt };
   }
 
   /**
-   * Refreshes exact product IDs. S-kaupat has no confirmed by-ID lookup in this
-   * client yet, so each ID is searched for and matched exactly. A miss is
-   * reported as "unknown", because search not matching an EAN does not prove
-   * the product is gone.
+   * Looks up exact EANs in one request. An EAN the store does not return is
+   * not_found: either the barcode is unknown or the store does not sell it.
    */
   async getProducts({ storeId, ids }: GetProductsInput): Promise<ProductsResult> {
-    const results: ProductLookup[] = [];
-    for (const id of ids) {
-      const search = await this.searchProducts({ storeId, query: id, limit: 5 });
-      const product = search.products.find((p) => p.id === id);
-      results.push(
-        product
-          ? { id, status: "found", product }
-          : { id, status: "unknown", reason: "Not returned by a search for this ID in this store." },
-      );
-    }
-    return { storeId, results, observedAt: new Date().toISOString() };
-  }
-
-  private requireHash(hash: string | undefined, envName: string, operation: string): string {
-    if (hash) return hash;
-    throw new SKaupatError(
-      "unsupported",
-      `Live S-kaupat access is not configured: set ${envName} to the persisted query hash of ${operation}. ` +
-        "See the README section 'Live mode'.",
-    );
-  }
-
-  /** GET with a persisted query hash, as the website does. */
-  private async query(operationName: string, hash: string, variables: Record<string, unknown>): Promise<unknown> {
-    const url = new URL(this.apiUrl);
-    url.searchParams.set("operationName", operationName);
-    url.searchParams.set("variables", JSON.stringify(variables));
-    url.searchParams.set("extensions", JSON.stringify({ persistedQuery: { version: 1, sha256Hash: hash } }));
-
-    log.debug("GraphQL request", { operationName, variables });
-    return this.send(operationName, url, {
-      headers: {
-        Accept: "application/json",
-        Origin: this.origin,
-        Referer: `${this.origin}/`,
-      },
+    const { products, observedAt } = await this.listProducts(storeId, "RemoteProductsByEans", PRODUCTS_BY_EAN_QUERY, {
+      eans: ids,
+      limit: ids.length,
     });
+    const byId = new Map(products.map((p) => [p.id, p]));
+    const results: ProductLookup[] = ids.map((id) => {
+      const product = byId.get(id);
+      return product
+        ? { id, status: "found", product }
+        : { id, status: "not_found", reason: "Not sold in this store, or not a known barcode." };
+    });
+    return { storeId, results, observedAt };
+  }
+
+  private async listProducts(
+    storeId: string,
+    operationName: string,
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<{ products: Product[]; total: number | null; observedAt: string }> {
+    const raw = await this.post(operationName, query, { storeId, ...variables });
+    const observedAt = new Date().toISOString();
+    const parsed = ProductListResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected product list response", { operationName, issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected product response.");
+    }
+    const store = parsed.data.data.store;
+    if (!store) throw storeNotFound(storeId);
+    return {
+      products: store.products.productListItems.map((item) => mapProduct(item.product, storeId, observedAt)),
+      total: store.products.total ?? null,
+      observedAt,
+    };
   }
 
   /** POST with this client's own query text. */
@@ -273,6 +280,8 @@ export class HttpSKaupatClient implements SKaupatClient {
       throw new SKaupatError("blocked", `S-kaupat refused the request (HTTP ${response.status}).`);
     }
     if (!response.ok) {
+      // A rejected query (HTTP 400) means S-kaupat changed its API; the body names the field.
+      if (response.status === 400) log.warn("S-kaupat rejected a query", { operationName, body: await safeText(response) });
       throw new SKaupatError("upstream_error", `S-kaupat API returned HTTP ${response.status}.`);
     }
 
@@ -280,12 +289,6 @@ export class HttpSKaupatClient implements SKaupatClient {
     const errors = GraphQLErrorsSchema.safeParse(body);
     if (errors.success && errors.data.errors.length > 0) {
       const first = errors.data.errors[0];
-      if (first?.extensions?.code === "PERSISTED_QUERY_NOT_FOUND") {
-        throw new SKaupatError(
-          "unsupported",
-          `The configured hash for ${operationName} is no longer accepted by S-kaupat; capture a fresh one.`,
-        );
-      }
       // Partial data with errors is still usable; fall through when data exists.
       if (!(body as { data?: unknown }).data) {
         throw new SKaupatError("upstream_error", first?.message ?? "S-kaupat returned a GraphQL error.");
@@ -300,25 +303,46 @@ function mapProduct(p: z.infer<typeof ApiProductSchema>, storeId: string, observ
   const unit = p.priceUnit?.toUpperCase() ?? null;
   const priceBasis = unit === "KPL" ? "per_item" : unit === "KG" ? "per_weight" : "unknown";
   const imageTemplate = p.productDetails?.productImages?.mainImage?.urlTemplate;
+  // hierarchyPath is ordered leaf first.
+  const leaf = p.hierarchyPath?.[0];
   return {
     id: p.ean,
     storeId,
     name: p.name,
     brand: p.brandName ?? null,
     price: pricing?.currentPrice ?? p.price ?? null,
+    regularPrice: pricing?.regularPrice ?? null,
     campaignPrice: pricing?.campaignPrice ?? null,
+    campaignValidUntil: pricing?.campaignPriceValidUntil ?? null,
+    lowest30DayPrice: pricing?.lowest30DayPrice ?? null,
+    depositPrice: pricing?.depositPrice || null,
     priceBasis,
+    approximatePrice: pricing?.isApproximatePrice ?? p.approxPrice ?? null,
     comparisonPrice: pricing?.comparisonPrice ?? null,
     comparisonUnit: pricing?.comparisonUnit ?? null,
     packSize: null,
     quantityUnit: unit,
+    // availability is null for ordinary in-stock products; what a label means is not mapped yet.
     availability: "unknown",
-    category: p.hierarchyPath?.[0]?.name ?? null,
+    category: leaf?.name ?? null,
+    categorySlug: leaf?.slug ?? null,
+    labels: p.packagingLabels ?? [],
+    ageLimited: p.isAgeLimitedByAlcohol ?? null,
+    frozen: p.frozen ?? null,
+    shelfLocation: p.location ? { aisle: p.location.aisle ?? null, shelf: p.location.shelf ?? null } : null,
     imageUrl: imageTemplate
       ? imageTemplate.replace("{MODIFIERS}", "w_300,h_300").replace("{EXTENSION}", "jpg")
       : null,
     observedAt,
   };
+}
+
+async function safeText(response: Response): Promise<string> {
+  try {
+    return (await response.text()).slice(0, 500);
+  } catch {
+    return "";
+  }
 }
 
 const ApiStoreSchema = z

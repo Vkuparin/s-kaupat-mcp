@@ -10,10 +10,11 @@ import { FixtureSKaupatClient } from "../client/fixture-client.js";
 import { HttpSKaupatClient } from "../client/http-client.js";
 import { FileStoreSelection, type StoreSelection } from "../selection.js";
 import { createServer } from "../server.js";
+import type { SKaupatClient } from "../client/types.js";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "catalogue.json");
 
-async function connect(client = new FixtureSKaupatClient(fixtures), selection?: StoreSelection) {
+async function connect(client: SKaupatClient = new FixtureSKaupatClient(fixtures), selection?: StoreSelection) {
   const server = createServer(client, { selection });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0.0.0" });
@@ -144,9 +145,31 @@ test("invalid arguments are rejected", async () => {
   assert.equal(res.isError, true);
 });
 
-test("live mode without hashes reports unsupported", async () => {
-  const mcp = await connect(new HttpSKaupatClient({ fetchImpl: () => assert.fail("must not fetch") }) as any);
+test("search_products pages and sorts by price", async () => {
+  const mcp = await connect();
+  const cheapest = await call(mcp, "search_products", { storeId: "fixture-store-1", query: "maito", sort: "price_asc", limit: 1 });
+  assert.equal(cheapest.data.total, 2);
+  assert.deepEqual(cheapest.data.products.map((p: any) => p.price), [1.09]);
+  const next = await call(mcp, "search_products", {
+    storeId: "fixture-store-1",
+    query: "maito",
+    sort: "price_asc",
+    limit: 1,
+    offset: 1,
+  });
+  assert.equal(next.data.offset, 1);
+  assert.deepEqual(next.data.products.map((p: any) => p.price), [1.39]);
+});
+
+test("live search_products goes to S-kaupat without any hash configuration", async () => {
+  let calls = 0;
+  const fetchImpl = (async () => {
+    calls++;
+    return new Response(JSON.stringify({ data: { store: { id: "1", products: { total: 0, productListItems: [] } } } }));
+  }) as unknown as typeof fetch;
+  const mcp = await connect(new HttpSKaupatClient({ fetchImpl }));
   const { isError, data } = await call(mcp, "search_products", { storeId: "1", query: "maito" });
-  assert.equal(isError, true);
-  assert.equal(data.error.code, "unsupported");
+  assert.equal(isError, false);
+  assert.equal(calls, 1);
+  assert.deepEqual(data.products, []);
 });

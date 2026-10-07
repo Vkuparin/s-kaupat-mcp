@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) browse the [S-kaupat.fi](https://www.s-kaupat.fi) grocery catalogue: find stores, search products and refresh exact products by ID.
 
-Status: **early scaffold (v0.1.0)**. Catalogue and store-selection tools only; no login or cart yet. Live access to S-kaupat is unverified, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.1.0)**. Catalogue and store-selection tools only; no login or shopping lists yet. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Tools
 
@@ -11,8 +11,8 @@ Status: **early scaffold (v0.1.0)**. Catalogue and store-selection tools only; n
 | `search_stores` | `query` (name, city or postal code), `chain`, `limit`, `includeOpeningHours` | Picker-ready stores: ID, name, chain, address, coordinates, online ordering, today's opening hours, whether it is the selected store |
 | `select_store` | `storeId` | Saves the user's store and returns it with opening hours for the coming week |
 | `get_selected_store` | none | The saved store with opening hours, or `selectedStore: null` when none is chosen yet |
-| `search_products` | `storeId` (optional), `query`, `limit` | Products in that store: ID (EAN), name, brand, price, campaign price, comparison price and unit, price basis, observation time |
-| `get_products` | `storeId` (optional), `ids[]` | One result per ID: `found` with the product, `not_found`, or `unknown` |
+| `search_products` | `storeId` (optional), `query`, `limit`, `offset`, `sort` (`relevance`, `price_asc`, `price_desc`) | Products in that store: ID (EAN), name, brand, price, regular and campaign price, comparison price and unit, category, labels, shelf location, image URL, observation time |
+| `get_products` | `storeId` (optional), `ids[]` (EANs) | One result per ID, from one request: `found` with the product, or `not_found` (not sold in that store, or unknown barcode) |
 
 Prices are per store. Product tools use the store chosen with `select_store` unless a `storeId` is passed, and fail with `store_not_selected` when there is neither. Fields S-kaupat does not report come back as `null` (or `"unknown"`) rather than guessed.
 
@@ -85,17 +85,14 @@ Offline sample data (works right away, no network):
 }
 ```
 
-Live S-kaupat (product search needs the hash described below; store tools work without it):
+Live S-kaupat (no configuration needed):
 
 ```json
 {
   "mcpServers": {
     "s-kaupat": {
       "command": "node",
-      "args": ["D:\\AIstuff\\repos\\s-kaupat-mcp\\dist\\index.js"],
-      "env": {
-        "SKAUPAT_PRODUCT_SEARCH_HASH": "<sha256 for RemoteFilteredProducts>"
-      }
+      "args": ["D:\\AIstuff\\repos\\s-kaupat-mcp\\dist\\index.js"]
     }
   }
 }
@@ -109,21 +106,14 @@ On macOS or Linux use a normal path such as `/Users/you/s-kaupat-mcp/dist/index.
 |---|---|---|
 | `SKAUPAT_MODE` | `live` | `live` calls S-kaupat; `fixtures` serves `fixtures/catalogue.json` with no network |
 | `SKAUPAT_FIXTURES` | `fixtures/catalogue.json` | Alternative fixture catalogue |
-| `SKAUPAT_PRODUCT_SEARCH_HASH` | none | Persisted query hash for `RemoteFilteredProducts` |
 | `SKAUPAT_SETTINGS_FILE` | `%APPDATA%\s-kaupat-mcp\settings.json` on Windows, `~/.config/s-kaupat-mcp/settings.json` elsewhere | Where the selected store is saved (no credentials) |
 | `SKAUPAT_DEBUG` | off | `1` logs each API request to stderr |
 
 ## Live mode
 
-Store tools (`search_stores`, `select_store`, `get_selected_store`) send their own GraphQL query text to `api.s-kaupat.fi`, which accepts it without login, so they need no configuration. Product search still uses the website's *persisted query hash*, which changes when S-kaupat deploys, until it is moved to its own query text too. Capture it by hand:
+Every tool sends its own GraphQL query text to `api.s-kaupat.fi`, which accepts it without login, so live mode needs no configuration and no persisted-query hashes (see [docs/s-kaupat-api.md](docs/s-kaupat-api.md), section 1). Parsing is tested against responses captured live in `docs/samples/` and `fixtures/api/`.
 
-1. Open https://www.s-kaupat.fi in Chrome or Edge, open DevTools → Network and filter for `api.s-kaupat.fi`.
-2. Search for any product. Click the `RemoteFilteredProducts` request and copy `sha256Hash` from the `extensions` query parameter.
-3. Put it into the Claude Desktop config above.
-
-When the hash goes stale, product tools return the `unsupported` error code with a message saying so. Store parsing is tested against responses captured live (`fixtures/api/`); product parsing has not yet been checked against live traffic.
-
-`get_products` currently searches each ID and matches it exactly, because no by-ID lookup has been mapped yet. A miss is reported as `unknown`, not `not_found`, since a search miss does not prove the product is gone.
+If S-kaupat changes its API, a rejected query comes back as `upstream_error`, and the server logs S-kaupat's explanation (which names the changed field) to stderr. If S-kaupat ever stops accepting query text and only allows the website's own persisted queries, that is the main platform risk described in the API notes.
 
 ## Project layout
 
@@ -148,4 +138,4 @@ The MCP layer depends only on the `SKaupatClient` interface, so the transport ch
 
 ## Not included yet
 
-Login, cart tools, stock availability, product detail, automatic hash refresh and packaged releases. See the plan.
+Login, shopping lists, stock availability, product detail, categories and packaged releases. See the plan.

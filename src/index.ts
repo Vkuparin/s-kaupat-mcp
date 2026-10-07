@@ -18,9 +18,7 @@ function createClient(): SKaupatClient {
     return new FixtureSKaupatClient(path);
   }
   if (mode !== "live") throw new Error(`Unknown SKAUPAT_MODE: ${mode} (expected "live" or "fixtures")`);
-  return new HttpSKaupatClient({
-    productSearchHash: process.env.SKAUPAT_PRODUCT_SEARCH_HASH,
-  });
+  return new HttpSKaupatClient();
 }
 
 async function main(): Promise<void> {

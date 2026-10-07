@@ -3,7 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { storeNotFound, storeNotSelected, toSKaupatError } from "./errors.js";
 import { log } from "./log.js";
-import { STORE_CHAINS, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
+import { PRODUCT_SORTS, STORE_CHAINS, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
 import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./selection.js";
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
 
@@ -141,17 +141,25 @@ export function createServer(client: SKaupatClient, options: ServerOptions = {})
       title: "Search S-kaupat products",
       description:
         "Search products in one S-kaupat store (the user's chosen store unless storeId is given). Returns " +
-        "product IDs, prices, comparison prices and units. Fields S-kaupat did not report are null rather " +
-        "than guessed. Fails with store_not_selected when no store is chosen.",
+        "product IDs (EAN barcodes), prices, campaign prices, comparison prices, category, shelf location and " +
+        "an image URL. Fields S-kaupat did not report are null rather than guessed. Use offset to page through " +
+        "more results. Fails with store_not_selected when no store is chosen.",
       inputSchema: {
         storeId,
-        query: z.string().min(1).describe("Search text, e.g. 'maito' or 'ruisleipä'."),
+        query: z.string().min(1).describe("Search text in Finnish, e.g. 'maito' or 'ruisleipä'."),
         limit: z.number().int().min(1).max(50).default(20).describe("Maximum products to return."),
+        offset: z.number().int().min(0).max(1000).default(0).describe("Products to skip, for the next page."),
+        sort: z
+          .enum(PRODUCT_SORTS)
+          .default("relevance")
+          .describe("relevance (S-kaupat's own ranking), price_asc or price_desc."),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async ({ storeId, query, limit }) =>
-      run("search_products", () => client.searchProducts({ storeId: resolveStoreId(storeId), query, limit })),
+    async ({ storeId, query, limit, offset, sort }) =>
+      run("search_products", () =>
+        client.searchProducts({ storeId: resolveStoreId(storeId), query, limit, offset, sort }),
+      ),
   );
 
   server.registerTool(
@@ -159,8 +167,9 @@ export function createServer(client: SKaupatClient, options: ServerOptions = {})
     {
       title: "Get S-kaupat products by ID",
       description:
-        "Refresh exact products by ID in one store (the user's chosen store unless storeId is given). Each ID " +
-        "comes back as found, not_found or unknown; unknown means the lookup could not confirm either way.",
+        "Refresh exact products by ID (EAN) in one store (the user's chosen store unless storeId is given), in " +
+        "one request. Each ID comes back as found (with current price) or not_found (not sold in that store, " +
+        "or not a known barcode).",
       inputSchema: {
         storeId,
         ids: z.array(z.string().min(1)).min(1).max(20).describe("Product IDs from search_products."),

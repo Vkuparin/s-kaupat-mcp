@@ -5,6 +5,7 @@ import type {
   GetProductsInput,
   Product,
   ProductSearchResult,
+  ProductSort,
   ProductsResult,
   SearchProductsInput,
   OpeningDay,
@@ -15,7 +16,12 @@ import type {
   StoreSearchResult,
 } from "./types.js";
 
-type FixtureProduct = Omit<Product, "storeId" | "availability" | "imageUrl" | "observedAt">;
+/** Catalogue entries name the core fields; the rest default to "unknown" values. */
+type FixtureProduct = Pick<
+  Product,
+  "id" | "name" | "brand" | "price" | "campaignPrice" | "priceBasis" | "comparisonPrice" | "comparisonUnit" | "packSize" | "quantityUnit" | "category"
+> &
+  Partial<Product>;
 
 /** Same opening hours every day: "ALL_DAY", "CLOSED", or one range. */
 type FixtureHours = "ALL_DAY" | "CLOSED" | { open: string; close: string };
@@ -55,16 +61,21 @@ export class FixtureSKaupatClient implements SKaupatClient {
     return found;
   }
 
-  async searchProducts({ storeId, query, limit }: SearchProductsInput): Promise<ProductSearchResult> {
+  async searchProducts({ storeId, query, limit, offset = 0, sort = "relevance" }: SearchProductsInput): Promise<ProductSearchResult> {
     this.requireStore(storeId);
     const observedAt = new Date().toISOString();
     const q = normalize(query);
-    const matches = this.catalogue.products.filter((p) => p.id === query || normalize(p.name).includes(q));
+    const matches = sortProducts(
+      this.catalogue.products.filter((p) => p.id === query || normalize(p.name).includes(q)),
+      sort,
+    );
     return {
       storeId,
       query,
       total: matches.length,
-      products: matches.slice(0, limit).map((p) => this.toProduct(p, storeId, observedAt)),
+      offset,
+      sort,
+      products: matches.slice(offset, offset + limit).map((p) => this.toProduct(p, storeId, observedAt)),
       observedAt,
     };
   }
@@ -91,8 +102,30 @@ export class FixtureSKaupatClient implements SKaupatClient {
   }
 
   private toProduct(p: FixtureProduct, storeId: string, observedAt: string): Product {
-    return { ...p, storeId, availability: "unknown", imageUrl: null, observedAt };
+    return {
+      regularPrice: p.price,
+      campaignValidUntil: null,
+      lowest30DayPrice: null,
+      depositPrice: null,
+      approximatePrice: p.priceBasis === "per_weight",
+      availability: "unknown",
+      categorySlug: null,
+      labels: [],
+      ageLimited: false,
+      frozen: false,
+      shelfLocation: null,
+      imageUrl: null,
+      ...p,
+      storeId,
+      observedAt,
+    };
   }
+}
+
+function sortProducts<T extends { price: number | null }>(products: T[], sort: ProductSort): T[] {
+  if (sort === "relevance") return products;
+  const dir = sort === "price_asc" ? 1 : -1;
+  return [...products].sort((a, b) => dir * ((a.price ?? Infinity) - (b.price ?? Infinity)));
 }
 
 function normalize(s: string): string {

@@ -66,27 +66,51 @@ export interface StoreSearchResult {
 
 export type PriceBasis = "per_item" | "per_weight" | "unknown";
 
+/** Product sort orders. "relevance" is S-kaupat's own search ranking. */
+export const PRODUCT_SORTS = ["relevance", "price_asc", "price_desc"] as const;
+export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
 export interface Product {
-  /** Product ID as S-kaupat identifies it (currently the EAN). */
+  /** Product ID as S-kaupat identifies it (the EAN barcode). */
   id: string;
   storeId: string;
   name: string;
   brand: string | null;
-  /** Current shelf price in euros. */
+  /** Current shelf price in euros (the campaign price while a campaign runs). */
   price: number | null;
+  /** Normal price in euros, when S-kaupat reports one. */
+  regularPrice: number | null;
   /** Campaign price in euros, when one applies. */
   campaignPrice: number | null;
+  /** Last day of the campaign price as S-kaupat reports it, when known. */
+  campaignValidUntil: string | null;
+  /** Lowest price in the last 30 days in euros, when S-kaupat reports one. */
+  lowest30DayPrice: number | null;
+  /** Bottle or can deposit in euros, when one applies. */
+  depositPrice: number | null;
   priceBasis: PriceBasis;
+  /** True when the price is an estimate, e.g. for weighed goods. Null = unknown. */
+  approximatePrice: boolean | null;
   /** Comparison (unit) price in euros per comparisonUnit. */
   comparisonPrice: number | null;
-  /** Unit for comparisonPrice, e.g. "KG", "L", "KPL". */
+  /** Unit for comparisonPrice as S-kaupat reports it, e.g. "LTR" (litre) or "KPL" (piece). */
   comparisonUnit: string | null;
   /** Pack size as shown by the store, e.g. "1 l", when known. */
   packSize: string | null;
   /** Native quantity unit used when adding to cart, when known. */
   quantityUnit: string | null;
   availability: "available" | "unavailable" | "unknown";
+  /** Most specific category name, e.g. "Maidot". */
   category: string | null;
+  /** Category path usable with browse_category, e.g. "maito-munat-ja-rasvat/maidot-ja-piimat/maidot". */
+  categorySlug: string | null;
+  /** Packaging and origin labels, e.g. "Hyvää Suomesta (Sininen Joutsen)". */
+  labels: string[];
+  /** Alcohol with an age limit. Null = unknown. */
+  ageLimited: boolean | null;
+  frozen: boolean | null;
+  /** Where the product is in the physical store, when known. */
+  shelfLocation: { aisle: string | null; shelf: string | null } | null;
   imageUrl: string | null;
   /** ISO timestamp of when this data was fetched. */
   observedAt: string;
@@ -97,6 +121,9 @@ export interface ProductSearchResult {
   query: string;
   /** Total matches reported by S-kaupat, when known. */
   total: number | null;
+  /** Offset of the first returned product, for paging. */
+  offset: number;
+  sort: ProductSort;
   products: Product[];
   observedAt: string;
 }
@@ -122,6 +149,9 @@ export interface SearchProductsInput {
   storeId: string;
   query: string;
   limit: number;
+  /** Number of products to skip, for paging. Defaults to 0. */
+  offset?: number;
+  sort?: ProductSort;
 }
 
 export interface GetProductsInput {

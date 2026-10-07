@@ -74,6 +74,9 @@ Apps should branch on `code`, never on the message text. The codes an app is mos
 | `login_required` | Show a "Log in" button that calls `start_login` |
 | `session_expired` | Same: the saved login stopped working, so the user logs in again |
 | `login_window_unavailable` | The login window can't open on this device (no Edge or Chrome) |
+| `browser_unavailable` | The S-kaupat browser window can't open (no Edge or Chrome) |
+| `browser_busy` | Another app's copy of the server has the S-kaupat window open; retry shortly |
+| `login_in_progress` | The login window is open; finish logging in first |
 | `store_not_selected` | Ask the user to choose a store |
 | `store_not_found` | The store ID is wrong or the store closed; pick another |
 | `product_unavailable` | The product isn't sold or orderable in this store |
@@ -198,13 +201,24 @@ Add `"env": { "SKAUPAT_MODE": "fixtures" }` for offline sample data. On macOS or
 | `SKAUPAT_TOKEN_FILE` | `<data dir>/refresh-token` | Token file path when `SKAUPAT_TOKEN_STORE=file` |
 | `SKAUPAT_BROWSER_PATH` | Edge, then Chrome | A Chromium-based browser for the login window |
 | `SKAUPAT_LOGIN_URL` | `https://www.s-kaupat.fi/` | Page the login window opens |
+| `SKAUPAT_TRANSPORT` | `browser` | `browser` sends API calls from a minimised browser window (see Live mode); `direct` uses plain HTTP |
 | `SKAUPAT_DEBUG` | off | `1` logs each API request to stderr (never tokens) |
 
 ## Live mode
 
-Every tool sends its own GraphQL query text to `api.s-kaupat.fi`, which accepts it without login, so live mode needs no configuration and no persisted-query hashes (see [docs/s-kaupat-api.md](docs/s-kaupat-api.md), section 1). Parsing is tested against responses captured live in `docs/samples/` and `fixtures/api/`.
+Every tool sends its own GraphQL query text to `api.s-kaupat.fi`; no persisted-query hashes are needed (see [docs/s-kaupat-api.md](docs/s-kaupat-api.md), section 1). Parsing is tested against responses captured live in `docs/samples/` and `fixtures/api/`.
 
-If S-kaupat changes its API, a rejected query comes back as `upstream_error`, and the server logs S-kaupat's explanation (which names the changed field) to stderr. If S-kaupat ever stops accepting query text and only allows the website's own persisted queries, that is the main platform risk described in the API notes.
+**The calls come from a browser window.** Since 7 October 2026 S-kaupat's API answers plain scripts with `403`, while it answers its own website. So by default (`SKAUPAT_TRANSPORT=browser`) the server keeps one Microsoft Edge (or Chrome) window with its own profile, started **minimised in the taskbar**, with the S-kaupat site open, and sends each API call from inside that page, the way the website does. It is a normal browser window that does not disguise itself.
+
+- The window opens on the first S-kaupat call and closes itself after 10 minutes without calls. Closing it by hand is fine; the next call opens it again.
+- It uses the same profile as the login window (`%LOCALAPPDATA%\s-kaupat-mcp\login-browser` on Windows), so treat that folder like a password. While the login window is open, other tools answer `login_in_progress`.
+- Calls go one at a time, at least half a second apart. If S-kaupat refuses a call, the page is reloaded once and the call retried once; after that the tool answers `blocked`.
+- Only one copy of the server can have the window open at a time. A second app running its own copy gets `browser_busy` until the first one's window closes.
+- `SKAUPAT_TRANSPORT=direct` sends plain HTTP requests instead (faster, no window), in case S-kaupat accepts them again.
+
+If S-kaupat changes its API, a rejected query comes back as `upstream_error`, and the server logs S-kaupat's explanation (which names the changed field) to stderr.
+
+The S-kaupat API is unofficial and undocumented. Use this with your own account for your own shopping; the server never places orders.
 
 ## Project layout
 
@@ -221,6 +235,10 @@ src/
     types.ts             domain types and the SKaupatClient interface
     http-client.ts       live S-kaupat GraphQL client
     fixture-client.ts    offline client for tests and demos
+  browser/
+    session.ts           the minimised S-kaupat browser window (starts on demand, closes when idle)
+    browser-fetch.ts     sends API calls from inside the S-kaupat page, one at a time
+    launch.ts            opens the server's own Edge/Chrome profile
   auth/
     session.ts           login state, quiet renewal, cross-process lock
     login-window.ts      the server's own login window

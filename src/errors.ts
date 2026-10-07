@@ -8,6 +8,9 @@ export type ErrorCode =
   | "login_required"
   | "session_expired"
   | "login_window_unavailable"
+  | "login_in_progress"
+  | "browser_unavailable"
+  | "browser_busy"
   | "store_not_selected"
   | "store_not_found"
   | "product_unavailable"
@@ -40,6 +43,18 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
   login_window_unavailable: {
     fi: "Kirjautumisikkunaa ei voitu avata tällä laitteella.",
     en: "The login window could not be opened on this device.",
+  },
+  login_in_progress: {
+    fi: "Kirjautuminen on kesken. Kirjaudu ensin loppuun ja yritä sitten uudelleen.",
+    en: "Login is in progress. Finish logging in, then try again.",
+  },
+  browser_unavailable: {
+    fi: "S-kaupat tarvitsee Microsoft Edge- tai Google Chrome -selaimen, eikä sitä voitu avata.",
+    en: "S-kaupat needs Microsoft Edge or Google Chrome, and it could not be opened.",
+  },
+  browser_busy: {
+    fi: "S-kaupat on jo käytössä toisessa sovelluksessa. Yritä hetken päästä uudelleen.",
+    en: "S-kaupat is in use in another app. Please try again in a moment.",
   },
   store_not_selected: { fi: "Valitse ensin kauppa.", en: "Please choose a store first." },
   store_not_found: {

@@ -1,4 +1,4 @@
-import { SKaupatError } from "../errors.js";
+import { launchProfile } from "../browser/launch.js";
 import { log } from "../log.js";
 
 /**
@@ -78,59 +78,15 @@ export class BrowserLoginWindow implements LoginWindow {
     }
   }
 
-  private async launch() {
-    let chromium: typeof import("playwright-core").chromium;
-    try {
-      ({ chromium } = await import("playwright-core"));
-    } catch {
-      throw new SKaupatError("login_window_unavailable", "playwright-core is not installed.");
-    }
-    const executablePath = this.options.executablePath ?? process.env.SKAUPAT_BROWSER_PATH;
-    const candidates: { channel?: string; executablePath?: string }[] = executablePath
-      ? [{ executablePath }]
-      : [{ channel: "msedge" }, { channel: "chrome" }];
-    const errors: string[] = [];
-    for (const candidate of candidates) {
-      try {
-        return await chromium.launchPersistentContext(this.options.profileDir, {
-          ...candidate,
-          headless: this.options.headless ?? false,
-          viewport: null,
-          // Playwright's default flags tune the browser for test automation (and show a "controlled by
-          // automated test software" bar). The login window should be a plain browser, so only the
-          // flags it needs are passed.
-          ignoreDefaultArgs: true,
-          args: browserArgs(this.options.profileDir, this.options.headless ?? false),
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message.split("\n")[0]! : String(err);
-        if (/already in use|ProcessSingleton|SingletonLock/i.test(message)) {
-          throw new SKaupatError("login_window_unavailable", "The login window is already open in another process.");
-        }
-        errors.push(`${candidate.channel ?? candidate.executablePath}: ${message}`);
-      }
-    }
-    throw new SKaupatError(
-      "login_window_unavailable",
-      `No usable browser for the login window (needs Microsoft Edge or Google Chrome, or SKAUPAT_BROWSER_PATH). ${errors.join("; ")}`,
-    );
+  private launch() {
+    return launchProfile({
+      profileDir: this.options.profileDir,
+      headless: this.options.headless ?? false,
+      executablePath: this.options.executablePath,
+      unavailableCode: "login_window_unavailable",
+      busyCode: "login_window_unavailable",
+    });
   }
-}
-
-function browserArgs(profileDir: string, headless: boolean): string[] {
-  return [
-    `--user-data-dir=${profileDir}`,
-    "--remote-debugging-pipe",
-    "--window-size=520,820",
-    "--no-first-run",
-    "--no-default-browser-check",
-    "--disable-sync",
-    // Edge otherwise signs a new profile in with the Windows Microsoft account. This profile should
-    // only ever hold the S-kaupat login.
-    "--disable-features=msImplicitSignin",
-    ...(headless ? ["--headless", "--no-sandbox"] : []),
-    "about:blank",
-  ];
 }
 
 /** Looks through localStorage entries for an object holding a non-empty refreshToken. */

@@ -103,7 +103,17 @@ export class LiveAuth implements SKaupatAuth {
     this.access = result.login.accessToken ? this.toAccess(result.login.accessToken) : null;
     log.info("Login saved", { store: this.options.store.description });
 
-    const displayName = await this.loadDisplayName();
+    // The login is saved at this point. If only the name lookup fails (S-kaupat busy or refusing
+    // the request), still report success rather than telling the user their login failed.
+    let displayName: string | null = null;
+    try {
+      displayName = await this.loadDisplayName();
+    } catch (err) {
+      if (err instanceof SKaupatError && err.code === "session_expired") throw err;
+      log.warn("Login saved, but the account name could not be fetched", {
+        code: err instanceof SKaupatError ? err.code : "unknown",
+      });
+    }
     return { status: "logged_in", displayName, alreadyLoggedIn: false };
   }
 

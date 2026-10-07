@@ -253,3 +253,14 @@ test("auth API errors never contain the token", async () => {
   const api = new HttpAuthApi({ fetchImpl: fetchReturning({ data: { authTokens: null } }) });
   await assert.rejects(api.refresh("super-secret-refresh"), (e: Error) => !e.message.includes("super-secret-refresh"));
 });
+
+test("start_login reports success when the login is saved but the name lookup is refused", async () => {
+  const window = new FakeWindow({ status: "logged_in", login: { refreshToken: "refresh-1", accessToken: jwt(inAnHour()) } });
+  const { auth, store, api } = await setup(null, window);
+  api.userProfile = async () => {
+    throw new SKaupatError("blocked", "S-kaupat refused the request (HTTP 403).");
+  };
+  const result = await auth.startLogin({ timeoutSeconds: 60 });
+  assert.deepEqual(result, { status: "logged_in", displayName: null, alreadyLoggedIn: false });
+  assert.equal(await store.read(), "refresh-1");
+});

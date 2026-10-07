@@ -1,0 +1,728 @@
+{
+  "_note": "Captured live 2026-10-07. Trimmed: first 5 of 49 services; category tree expanded only under maito-munat-ja-rasvat (31 top-level items, 3 levels deep in the full response).",
+  "request": {
+    "operationName": "RemoteStoreInfo",
+    "variables": {
+      "id": "517609418"
+    },
+    "query": "query RemoteStoreInfo($id: ID!) { store(id: $id) { __typename id name shortName brand slug coOperative weeklyOpeningHours { weekNumber openingTimes { date day mode ranges { open close } } } contactInfo { email phoneNumber { number callChargeGroup callCharge { default fi sv en } } } services { code name { default fi sv en } } navigation { id name slug children { id name slug children { id name slug } } } } }"
+  },
+  "response": {
+    "data": {
+      "store": {
+        "__typename": "Store",
+        "id": "517609418",
+        "name": "Prisma Kaleva",
+        "shortName": "Kaleva",
+        "brand": "prisma",
+        "slug": "prisma-kaleva",
+        "coOperative": "POK",
+        "weeklyOpeningHours": [
+          {
+            "weekNumber": 41,
+            "openingTimes": [
+              {
+                "date": "2026-10-05",
+                "day": "MON",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-06",
+                "day": "TUE",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-07",
+                "day": "WED",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-08",
+                "day": "THU",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-09",
+                "day": "FRI",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-10",
+                "day": "SAT",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-11",
+                "day": "SUN",
+                "mode": "ALL_DAY",
+                "ranges": null
+              }
+            ]
+          },
+          {
+            "weekNumber": 42,
+            "openingTimes": [
+              {
+                "date": "2026-10-12",
+                "day": "MON",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-13",
+                "day": "TUE",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-14",
+                "day": "WED",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-15",
+                "day": "THU",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-16",
+                "day": "FRI",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-17",
+                "day": "SAT",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-18",
+                "day": "SUN",
+                "mode": "ALL_DAY",
+                "ranges": null
+              }
+            ]
+          },
+          {
+            "weekNumber": 43,
+            "openingTimes": [
+              {
+                "date": "2026-10-19",
+                "day": "MON",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-20",
+                "day": "TUE",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-21",
+                "day": "WED",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-22",
+                "day": "THU",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-23",
+                "day": "FRI",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-24",
+                "day": "SAT",
+                "mode": "ALL_DAY",
+                "ranges": null
+              },
+              {
+                "date": "2026-10-25",
+                "day": "SUN",
+                "mode": "ALL_DAY",
+                "ranges": null
+              }
+            ]
+          }
+        ],
+        "contactInfo": {
+          "email": null,
+          "phoneNumber": {
+            "number": "010 767 0100",
+            "callChargeGroup": "mpm-pvm",
+            "callCharge": {
+              "default": "mpm/pvm",
+              "fi": null,
+              "sv": "msa/ina",
+              "en": "mcf/inf"
+            }
+          }
+        },
+        "services": [
+          {
+            "code": "lahitapiola",
+            "name": {
+              "default": "LähiTapiola",
+              "fi": null,
+              "sv": "LokalTapiola",
+              "en": "LocalTapiola"
+            }
+          },
+          {
+            "code": "apteekki",
+            "name": {
+              "default": "Apteekki",
+              "fi": null,
+              "sv": "Apotek",
+              "en": "Pharmacy"
+            }
+          },
+          {
+            "code": "saldopaate",
+            "name": {
+              "default": "S-Etukorttipääte",
+              "fi": null,
+              "sv": "S-Förmånskortsterminal",
+              "en": "S-Etukortti Card Terminal"
+            }
+          },
+          {
+            "code": "ekopiste-muovi",
+            "name": {
+              "default": "Ekopiste - Muovipakkaukset",
+              "fi": null,
+              "sv": "Ekopunkt - Plastförpackningar",
+              "en": "Recycling - Plastic packaging"
+            }
+          },
+          {
+            "code": "ruoan-verkkokauppa",
+            "name": {
+              "default": "Ruoan verkkokauppa",
+              "fi": null,
+              "sv": "Matbutik på nätet",
+              "en": "Food webshop"
+            }
+          }
+        ],
+        "navigation": [
+          {
+            "id": "1591691265158201",
+            "name": "Uutuustuotteet",
+            "slug": "uutuustuotteet",
+            "children": []
+          },
+          {
+            "id": "1591691311838853",
+            "name": "Kampanjat",
+            "slug": "kampanjat",
+            "children": []
+          },
+          {
+            "id": "1591691311151750",
+            "name": "Kasvipohjaiset tuotteet",
+            "slug": "kasvipohjaiset-tuotteet",
+            "children": []
+          },
+          {
+            "id": "StructureGroup_2399377157954654",
+            "name": "Ideat ja sesongit",
+            "slug": "ideat-ja-sesongit",
+            "children": "<trimmed: 6 children>"
+          },
+          {
+            "id": "Herkku_00000001",
+            "name": "Hedelmät ja vihannekset",
+            "slug": "hedelmat-ja-vihannekset",
+            "children": "<trimmed: 10 children>"
+          },
+          {
+            "id": "Herkku_00000008",
+            "name": "Leivät ja leivonnaiset",
+            "slug": "leivat-ja-leivonnaiset",
+            "children": "<trimmed: 9 children>"
+          },
+          {
+            "id": "StructureGroup_1796559627348384",
+            "name": "Ruokatori",
+            "slug": "ruokatori",
+            "children": "<trimmed: 4 children>"
+          },
+          {
+            "id": "Herkku_00000014",
+            "name": "Liha ja kasviproteiinit",
+            "slug": "liha-ja-kasviproteiinit",
+            "children": "<trimmed: 8 children>"
+          },
+          {
+            "id": "Herkku_00000004",
+            "name": "Kala ja merenelävät",
+            "slug": "kala-ja-merenelavat",
+            "children": "<trimmed: 4 children>"
+          },
+          {
+            "id": "Herkku_00000006",
+            "name": "Maito, munat ja rasvat",
+            "slug": "maito-munat-ja-rasvat",
+            "children": [
+              {
+                "id": "Herkku_00000122",
+                "name": "Maidot ja piimät",
+                "slug": "maito-munat-ja-rasvat/maidot-ja-piimat",
+                "children": [
+                  {
+                    "id": "1591691235495237",
+                    "name": "Erikoismaidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/erikoismaidot"
+                  },
+                  {
+                    "id": "1591691334546587",
+                    "name": "Kahvimaidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/kahvimaidot"
+                  },
+                  {
+                    "id": "1591691235495236",
+                    "name": "Laktoosittomat ja vähälaktoosiset maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/laktoosittomat-ja-vahalaktoosiset-maidot"
+                  },
+                  {
+                    "id": "1591691235495235",
+                    "name": "Maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+                  },
+                  {
+                    "id": "Herkku_00000682",
+                    "name": "Piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/piimat"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000123",
+                "name": "Kasvipohjaiset juomat",
+                "slug": "maito-munat-ja-rasvat/kasvipohjaiset-juomat",
+                "children": [
+                  {
+                    "id": "Herkku_00000683",
+                    "name": "Kaurajuomat",
+                    "slug": "maito-munat-ja-rasvat/kasvipohjaiset-juomat/kaurajuomat"
+                  },
+                  {
+                    "id": "Herkku_00000688",
+                    "name": "Mantelijuomat",
+                    "slug": "maito-munat-ja-rasvat/kasvipohjaiset-juomat/mantelijuomat"
+                  },
+                  {
+                    "id": "Herkku_00000685",
+                    "name": "Soijajuomat",
+                    "slug": "maito-munat-ja-rasvat/kasvipohjaiset-juomat/soijajuomat"
+                  },
+                  {
+                    "id": "Herkku_00000684",
+                    "name": "Riisijuomat",
+                    "slug": "maito-munat-ja-rasvat/kasvipohjaiset-juomat/riisijuomat"
+                  },
+                  {
+                    "id": "Herkku_00000686",
+                    "name": "Muut kasvijuomat",
+                    "slug": "maito-munat-ja-rasvat/kasvipohjaiset-juomat/muut-kasvijuomat"
+                  }
+                ]
+              },
+              {
+                "id": "1591691235643733",
+                "name": "Kermat",
+                "slug": "maito-munat-ja-rasvat/kermat",
+                "children": [
+                  {
+                    "id": "1591691334588652",
+                    "name": "Kahvikermat",
+                    "slug": "maito-munat-ja-rasvat/kermat/kahvikermat"
+                  },
+                  {
+                    "id": "1591691235643754",
+                    "name": "Kasvikermat",
+                    "slug": "maito-munat-ja-rasvat/kermat/kasvikermat"
+                  },
+                  {
+                    "id": "1591691235643752",
+                    "name": "Kermaviilit",
+                    "slug": "maito-munat-ja-rasvat/kermat/kermaviilit"
+                  },
+                  {
+                    "id": "1591691235643738",
+                    "name": "Kuohukermat",
+                    "slug": "maito-munat-ja-rasvat/kermat/kuohukermat"
+                  },
+                  {
+                    "id": "1591691235643741",
+                    "name": "Ranskankermat",
+                    "slug": "maito-munat-ja-rasvat/kermat/ranskankermat"
+                  },
+                  {
+                    "id": "1591691235643737",
+                    "name": "Ruokakermat",
+                    "slug": "maito-munat-ja-rasvat/kermat/ruokakermat"
+                  },
+                  {
+                    "id": "1591691235643742",
+                    "name": "Smetanat",
+                    "slug": "maito-munat-ja-rasvat/kermat/smetanat"
+                  },
+                  {
+                    "id": "1591691235643740",
+                    "name": "Vispikermat",
+                    "slug": "maito-munat-ja-rasvat/kermat/vispikermat"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000124",
+                "name": "Ruoanvalmistustuotteet",
+                "slug": "maito-munat-ja-rasvat/ruoanvalmistustuotteet",
+                "children": [
+                  {
+                    "id": "Herkku_00000709",
+                    "name": "Hiivat",
+                    "slug": "maito-munat-ja-rasvat/ruoanvalmistustuotteet/hiivat"
+                  },
+                  {
+                    "id": "Herkku_00000705",
+                    "name": "Kasvipohjaiset ruoanvalmistustuotteet",
+                    "slug": "maito-munat-ja-rasvat/ruoanvalmistustuotteet/kasvipohjaiset-ruoanvalmistustuotteet"
+                  },
+                  {
+                    "id": "Herkku_00000704",
+                    "name": "Jälkiruokakastikkeet",
+                    "slug": "maito-munat-ja-rasvat/ruoanvalmistustuotteet/jalkiruokakastikkeet"
+                  },
+                  {
+                    "id": "Herkku_00000701",
+                    "name": "Maito-, kerma- ja muut jauheet",
+                    "slug": "maito-munat-ja-rasvat/ruoanvalmistustuotteet/maito-kerma-ja-muut-jauheet"
+                  },
+                  {
+                    "id": "Herkku_00000706",
+                    "name": "Muut ruoanvalmistustuotteet",
+                    "slug": "maito-munat-ja-rasvat/ruoanvalmistustuotteet/muut-ruoanvalmistustuotteet"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000118",
+                "name": "Jogurtit",
+                "slug": "maito-munat-ja-rasvat/jogurtit",
+                "children": [
+                  {
+                    "id": "Herkku_00000642",
+                    "name": "Jogurttikastikkeet",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/jogurttikastikkeet"
+                  },
+                  {
+                    "id": "Herkku_00000637",
+                    "name": "Juotavat jogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/juotavat-jogurtit"
+                  },
+                  {
+                    "id": "Herkku_00000640",
+                    "name": "Kasvipohjaiset jogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/kasvipohjaiset-jogurtit"
+                  },
+                  {
+                    "id": "Herkku_00000711",
+                    "name": "Kreikkalaiset ja turkkilaiset ruoanvalmistusjogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/kreikkalaiset-ja-turkkilaiset-ruoanvalmistusjogurtit"
+                  },
+                  {
+                    "id": "1591691235643804",
+                    "name": "Maustamattomat jogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/maustamattomat-jogurtit"
+                  },
+                  {
+                    "id": "1591691235643803",
+                    "name": "Maustetut jogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/maustetut-jogurtit"
+                  },
+                  {
+                    "id": "Herkku_00000639",
+                    "name": "Rahkajogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/rahkajogurtit"
+                  },
+                  {
+                    "id": "1591691235643823",
+                    "name": "Terveysvaikutteiset jogurtit",
+                    "slug": "maito-munat-ja-rasvat/jogurtit/terveysvaikutteiset-jogurtit"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000117",
+                "name": "Viilit",
+                "slug": "maito-munat-ja-rasvat/viilit",
+                "children": [
+                  {
+                    "id": "Herkku_00000635",
+                    "name": "Maustetut viilit",
+                    "slug": "maito-munat-ja-rasvat/viilit/maustetut-viilit"
+                  },
+                  {
+                    "id": "Herkku_00000631",
+                    "name": "Maustamattomat viilit",
+                    "slug": "maito-munat-ja-rasvat/viilit/maustamattomat-viilit"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000115",
+                "name": "Rahkat, vanukkaat ja jälkiruoka",
+                "slug": "maito-munat-ja-rasvat/rahkat-vanukkaat-ja-jalkiruoka",
+                "children": [
+                  {
+                    "id": "1591691235703025",
+                    "name": "Maustamattomat rahkat",
+                    "slug": "maito-munat-ja-rasvat/rahkat-vanukkaat-ja-jalkiruoka/maustamattomat-rahkat"
+                  },
+                  {
+                    "id": "1591691235703027",
+                    "name": "Maustetut rahkat",
+                    "slug": "maito-munat-ja-rasvat/rahkat-vanukkaat-ja-jalkiruoka/maustetut-rahkat"
+                  },
+                  {
+                    "id": "Herkku_00000625",
+                    "name": "Vanukkaat",
+                    "slug": "maito-munat-ja-rasvat/rahkat-vanukkaat-ja-jalkiruoka/vanukkaat"
+                  },
+                  {
+                    "id": "Herkku_00000621",
+                    "name": "Kasvipohjaiset vanukkaat",
+                    "slug": "maito-munat-ja-rasvat/rahkat-vanukkaat-ja-jalkiruoka/kasvipohjaiset-vanukkaat"
+                  },
+                  {
+                    "id": "Herkku_00000649",
+                    "name": "Muut välipalat ja jälkiruoat",
+                    "slug": "maito-munat-ja-rasvat/rahkat-vanukkaat-ja-jalkiruoka/muut-valipalat-ja-jalkiruoat"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000121",
+                "name": "Munat",
+                "slug": "maito-munat-ja-rasvat/munat",
+                "children": [
+                  {
+                    "id": "Herkku_00000678",
+                    "name": "Luomukananmunat",
+                    "slug": "maito-munat-ja-rasvat/munat/luomukananmunat"
+                  },
+                  {
+                    "id": "Herkku_00000681",
+                    "name": "Vapaan kanan munat",
+                    "slug": "maito-munat-ja-rasvat/munat/vapaan-kanan-munat"
+                  },
+                  {
+                    "id": "Herkku_00000680",
+                    "name": "Virikekananmunat",
+                    "slug": "maito-munat-ja-rasvat/munat/virikekananmunat"
+                  },
+                  {
+                    "id": "Herkku_00000677",
+                    "name": "Munavalmisteet ja säilötyt munat",
+                    "slug": "maito-munat-ja-rasvat/munat/munavalmisteet-ja-sailotyt-munat"
+                  },
+                  {
+                    "id": "Herkku_00000676",
+                    "name": "Muut munat",
+                    "slug": "maito-munat-ja-rasvat/munat/muut-munat"
+                  }
+                ]
+              },
+              {
+                "id": "Herkku_00000049",
+                "name": "Rasvat",
+                "slug": "maito-munat-ja-rasvat/rasvat",
+                "children": [
+                  {
+                    "id": "Herkku_00000294",
+                    "name": "Voi",
+                    "slug": "maito-munat-ja-rasvat/rasvat/voi"
+                  },
+                  {
+                    "id": "Herkku_00000299",
+                    "name": "Margariinit",
+                    "slug": "maito-munat-ja-rasvat/rasvat/margariinit"
+                  },
+                  {
+                    "id": "Herkku_00000302",
+                    "name": "Terveysvaikutteiset margariinit",
+                    "slug": "maito-munat-ja-rasvat/rasvat/terveysvaikutteiset-margariinit"
+                  },
+                  {
+                    "id": "Herkku_00000297",
+                    "name": "Juokseva margariini",
+                    "slug": "maito-munat-ja-rasvat/rasvat/juokseva-margariini"
+                  },
+                  {
+                    "id": "Herkku_00000301",
+                    "name": "Rasvaseokset",
+                    "slug": "maito-munat-ja-rasvat/rasvat/rasvaseokset"
+                  },
+                  {
+                    "id": "Herkku_00000296",
+                    "name": "Maustevoi",
+                    "slug": "maito-munat-ja-rasvat/rasvat/maustevoi"
+                  },
+                  {
+                    "id": "Herkku_00000298",
+                    "name": "Paistorasva",
+                    "slug": "maito-munat-ja-rasvat/rasvat/paistorasva"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "Herkku_00000003",
+            "name": "Juustot, tofut ja kasvipohjaiset",
+            "slug": "juustot-tofut-ja-kasvipohjaiset",
+            "children": "<trimmed: 3 children>"
+          },
+          {
+            "id": "StructureGroup_1356670909914497",
+            "name": "Valmisruoka",
+            "slug": "valmisruoka",
+            "children": "<trimmed: 9 children>"
+          },
+          {
+            "id": "Herkku_00000088",
+            "name": "Pastat, riisit ja nuudelit",
+            "slug": "pastat-riisit-ja-nuudelit",
+            "children": "<trimmed: 5 children>"
+          },
+          {
+            "id": "Herkku_00000011",
+            "name": "Öljyt, maustaminen ja kastikkeet",
+            "slug": "oljyt-maustaminen-ja-kastikkeet",
+            "children": "<trimmed: 10 children>"
+          },
+          {
+            "id": "1591691298925705",
+            "name": "Texmex ja maailman makuja",
+            "slug": "texmex-ja-maailman-makuja",
+            "children": "<trimmed: 6 children>"
+          },
+          {
+            "id": "1591691286947141",
+            "name": "Hillot ja säilykkeet",
+            "slug": "hillot-ja-sailykkeet",
+            "children": "<trimmed: 10 children>"
+          },
+          {
+            "id": "Herkku_00000007",
+            "name": "Kuivatuotteet ja leivonta",
+            "slug": "kuivatuotteet-ja-leivonta",
+            "children": "<trimmed: 9 children>"
+          },
+          {
+            "id": "Herkku_00000005",
+            "name": "Alkoholi- ja virvoitusjuomat",
+            "slug": "alkoholi-ja-virvoitusjuomat",
+            "children": "<trimmed: 11 children>"
+          },
+          {
+            "id": "1591691312167219",
+            "name": "Kahvit, teet ja mehut",
+            "slug": "kahvit-teet-ja-mehut",
+            "children": "<trimmed: 8 children>"
+          },
+          {
+            "id": "Herkku_00000013",
+            "name": "Pakasteet",
+            "slug": "pakasteet",
+            "children": "<trimmed: 11 children>"
+          },
+          {
+            "id": "Herkku_00000009",
+            "name": "Karkit, suklaat ja keksit",
+            "slug": "karkit-suklaat-ja-keksit",
+            "children": "<trimmed: 11 children>"
+          },
+          {
+            "id": "Herkku_00000062",
+            "name": "Snacksit",
+            "slug": "snacksit",
+            "children": "<trimmed: 8 children>"
+          },
+          {
+            "id": "Herkku_00000016",
+            "name": "Urheiluravinteet, terveys ja itsehoito",
+            "slug": "urheiluravinteet-terveys-ja-itsehoito",
+            "children": "<trimmed: 15 children>"
+          },
+          {
+            "id": "Herkku_00000010",
+            "name": "Lapset",
+            "slug": "lapset",
+            "children": "<trimmed: 9 children>"
+          },
+          {
+            "id": "Herkku_00000012",
+            "name": "Lemmikit",
+            "slug": "lemmikit",
+            "children": "<trimmed: 5 children>"
+          },
+          {
+            "id": "1591691233334707",
+            "name": "Kosmetiikka ja hygienia",
+            "slug": "kosmetiikka-ja-hygienia",
+            "children": "<trimmed: 21 children>"
+          },
+          {
+            "id": "1591691234596256",
+            "name": "Kodinhoito ja taloustarvikkeet",
+            "slug": "kodinhoito-ja-taloustarvikkeet",
+            "children": "<trimmed: 7 children>"
+          },
+          {
+            "id": "1591691234054950",
+            "name": "Keittiö ja kattaus",
+            "slug": "keittio-ja-kattaus",
+            "children": "<trimmed: 9 children>"
+          },
+          {
+            "id": "1591691237793209",
+            "name": "Kukat ja koti",
+            "slug": "kukat-ja-koti",
+            "children": "<trimmed: 9 children>"
+          },
+          {
+            "id": "Herkku_00000002",
+            "name": "Vapaa-aika",
+            "slug": "vapaa-aika",
+            "children": "<trimmed: 12 children>"
+          },
+          {
+            "id": "1591691337283591",
+            "name": "Joulu",
+            "slug": "joulu",
+            "children": "<trimmed: 1 children>"
+          }
+        ]
+      }
+    }
+  }
+}

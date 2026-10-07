@@ -1,0 +1,228 @@
+{
+  "_note": "Captured live 2026-10-07/08 with anonymous POST to https://api.s-kaupat.fi/. Trimmed where stated.",
+  "request": {
+    "operationName": "RemoteFilteredProducts",
+    "variables": {
+      "storeId": "517609418",
+      "queryString": "maito",
+      "from": 0,
+      "limit": 3
+    },
+    "query": "query RemoteFilteredProducts($storeId: ID!, $queryString: String, $from: Int, $limit: Int) { store(id: $storeId) { id name products(queryString: $queryString, from: $from, limit: $limit) { total from limit searchProvider productListItems { __typename product { __typename id ean name price brandName slug storeId approxPrice basicQuantityUnit priceUnit quantityMultiplier isAgeLimitedByAlcohol frozen packagingLabels availability { label date } location { aisle shelf module floor } hierarchyPath { id name slug } pricing { __typename currentPrice comparisonPrice comparisonUnit campaignPrice regularPrice lowest30DayPrice depositPrice campaignPriceValidUntil isApproximatePrice salesUnit } productDetails { productImages { mainImage { urlTemplate } } } } } } } }"
+  },
+  "response": {
+    "data": {
+      "store": {
+        "id": "517609418",
+        "name": "Prisma Kaleva",
+        "products": {
+          "total": 1312,
+          "from": 0,
+          "limit": 3,
+          "searchProvider": "loop54",
+          "productListItems": [
+            {
+              "__typename": "ProductListItem",
+              "product": {
+                "__typename": "Product",
+                "id": "6414893386488",
+                "ean": "6414893386488",
+                "name": "Kotimaista kevytmaito 1 L",
+                "price": 0.95,
+                "brandName": "Kotimaista",
+                "slug": "kotimaista-kevytmaito-1-l",
+                "storeId": "517609418",
+                "approxPrice": false,
+                "basicQuantityUnit": "KPL",
+                "priceUnit": "KPL",
+                "quantityMultiplier": 1,
+                "isAgeLimitedByAlcohol": false,
+                "frozen": false,
+                "packagingLabels": [
+                  "Hyvää Suomesta (Sininen Joutsen)"
+                ],
+                "availability": null,
+                "location": {
+                  "aisle": "63",
+                  "shelf": "1",
+                  "module": "01275",
+                  "floor": 1
+                },
+                "hierarchyPath": [
+                  {
+                    "id": "1591691235495235",
+                    "name": "Maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+                  },
+                  {
+                    "id": "Herkku_00000122",
+                    "name": "Maidot ja piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+                  },
+                  {
+                    "id": "Herkku_00000006",
+                    "name": "Maito, munat ja rasvat",
+                    "slug": "maito-munat-ja-rasvat"
+                  }
+                ],
+                "pricing": {
+                  "__typename": "ProductPricing",
+                  "currentPrice": 0.95,
+                  "comparisonPrice": 0.95,
+                  "comparisonUnit": "LTR",
+                  "campaignPrice": null,
+                  "regularPrice": 0.95,
+                  "lowest30DayPrice": null,
+                  "depositPrice": null,
+                  "campaignPriceValidUntil": null,
+                  "isApproximatePrice": false,
+                  "salesUnit": "PCE"
+                },
+                "productDetails": {
+                  "productImages": {
+                    "mainImage": {
+                      "urlTemplate": "https://cdn.s-cloud.fi/v1/{MODIFIERS}/assets/dam-id/DyJl47EUq3HBX2A-iCv3Px.{EXTENSION}"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "__typename": "ProductListItem",
+              "product": {
+                "__typename": "Product",
+                "id": "6414893385672",
+                "ean": "6414893385672",
+                "name": "Kotimaista laktoositon kevytmaitojuoma 1 L",
+                "price": 1.39,
+                "brandName": "Kotimaista",
+                "slug": "kotimaista-laktoositon-kevytmaitojuoma-1-l",
+                "storeId": "517609418",
+                "approxPrice": false,
+                "basicQuantityUnit": "KPL",
+                "priceUnit": "KPL",
+                "quantityMultiplier": 1,
+                "isAgeLimitedByAlcohol": false,
+                "frozen": false,
+                "packagingLabels": [
+                  "FSC-sertifikaatti (Forest Stewardship Council)",
+                  "Hyvää Suomesta (Sininen Joutsen)"
+                ],
+                "availability": null,
+                "location": {
+                  "aisle": "63",
+                  "shelf": "1",
+                  "module": "01305",
+                  "floor": 1
+                },
+                "hierarchyPath": [
+                  {
+                    "id": "1591691235495236",
+                    "name": "Laktoosittomat ja vähälaktoosiset maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/laktoosittomat-ja-vahalaktoosiset-maidot"
+                  },
+                  {
+                    "id": "Herkku_00000122",
+                    "name": "Maidot ja piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+                  },
+                  {
+                    "id": "Herkku_00000006",
+                    "name": "Maito, munat ja rasvat",
+                    "slug": "maito-munat-ja-rasvat"
+                  }
+                ],
+                "pricing": {
+                  "__typename": "ProductPricing",
+                  "currentPrice": 1.39,
+                  "comparisonPrice": 1.39,
+                  "comparisonUnit": "LTR",
+                  "campaignPrice": null,
+                  "regularPrice": 1.39,
+                  "lowest30DayPrice": null,
+                  "depositPrice": null,
+                  "campaignPriceValidUntil": null,
+                  "isApproximatePrice": false,
+                  "salesUnit": "PCE"
+                },
+                "productDetails": {
+                  "productImages": {
+                    "mainImage": {
+                      "urlTemplate": "https://cdn.s-cloud.fi/v1/{MODIFIERS}/assets/dam-id/7YbeL-wcaIpBhfoDLM3Bu5.{EXTENSION}"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "__typename": "ProductListItem",
+              "product": {
+                "__typename": "Product",
+                "id": "6415712506032",
+                "ean": "6415712506032",
+                "name": "Kotimaista rasvaton maito 1l",
+                "price": 0.85,
+                "brandName": "Kotimaista",
+                "slug": "kotimaista-rasvaton-maito-1l",
+                "storeId": "517609418",
+                "approxPrice": false,
+                "basicQuantityUnit": "KPL",
+                "priceUnit": "KPL",
+                "quantityMultiplier": 1,
+                "isAgeLimitedByAlcohol": false,
+                "frozen": false,
+                "packagingLabels": [
+                  "Hyvää Suomesta (Sininen Joutsen)"
+                ],
+                "availability": null,
+                "location": {
+                  "aisle": "63",
+                  "shelf": "1",
+                  "module": "01265",
+                  "floor": 1
+                },
+                "hierarchyPath": [
+                  {
+                    "id": "1591691235495235",
+                    "name": "Maidot",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+                  },
+                  {
+                    "id": "Herkku_00000122",
+                    "name": "Maidot ja piimät",
+                    "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+                  },
+                  {
+                    "id": "Herkku_00000006",
+                    "name": "Maito, munat ja rasvat",
+                    "slug": "maito-munat-ja-rasvat"
+                  }
+                ],
+                "pricing": {
+                  "__typename": "ProductPricing",
+                  "currentPrice": 0.85,
+                  "comparisonPrice": 0.85,
+                  "comparisonUnit": "LTR",
+                  "campaignPrice": null,
+                  "regularPrice": 0.85,
+                  "lowest30DayPrice": null,
+                  "depositPrice": null,
+                  "campaignPriceValidUntil": null,
+                  "isApproximatePrice": false,
+                  "salesUnit": "PCE"
+                },
+                "productDetails": {
+                  "productImages": {
+                    "mainImage": {
+                      "urlTemplate": "https://cdn.s-cloud.fi/v1/{MODIFIERS}/assets/dam-id/EgIC40qkqw-9pDn0NjPWu1.{EXTENSION}"
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

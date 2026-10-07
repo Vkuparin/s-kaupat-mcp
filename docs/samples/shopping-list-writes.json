@@ -1,0 +1,92 @@
+{
+  "_note": "Request shapes of the website's own shopping-list writes, observed 2026-10-08 in the owner's logged-in browser while creating, filling and deleting one test list. Values replaced by their types; no ids, tokens or personal data recorded.",
+  "request_headers_sent_by_site": [
+    "accept",
+    "content-type",
+    "x-client-name",
+    "x-client-version",
+    "authorization",
+    "accept-language"
+  ],
+  "RemoteCreateUserList": {
+    "method": "POST",
+    "variables": {
+      "storeId": "string",
+      "name": "string"
+    },
+    "response": {
+      "createShoppingList": {
+        "id": "string",
+        "name": "string",
+        "createdAt": "string",
+        "items": []
+      }
+    }
+  },
+  "RemoteAddToShoppingList": {
+    "method": "POST",
+    "variables": {
+      "storeId": "string",
+      "shoppingListId": "string",
+      "item": {
+        "ean": "string",
+        "sokId": "string",
+        "name": "string",
+        "quantity": "number",
+        "isReplaceable": "boolean"
+      }
+    },
+    "response": {
+      "createShoppingListItem": {
+        "id": "string",
+        "name": "string",
+        "createdAt": "string",
+        "items": [
+          {
+            "id": "string",
+            "ean": "string",
+            "sokId": "string",
+            "...": "..."
+          }
+        ]
+      }
+    }
+  },
+  "RemoteGetUserListById": {
+    "method": "GET",
+    "variables": {
+      "id": "string",
+      "storeId": "string"
+    }
+  },
+  "RemoteGetUserLists": {
+    "method": "GET",
+    "variables": {
+      "storeId": "string"
+    }
+  },
+  "RemoteRemoveUserList": {
+    "method": "POST",
+    "variables": {
+      "id": "string"
+    },
+    "response": {
+      "deleteShoppingList": {
+        "id": "string"
+      }
+    }
+  },
+  "input_types_from_validator": {
+    "ShoppingListItemInput": {
+      "ean": "String!",
+      "sokId": "String!",
+      "name": "String!",
+      "quantity": "Float!",
+      "isReplaceable": "Boolean!"
+    },
+    "PartialCartItemInput": {
+      "ean": "String!",
+      "itemCount": "String!"
+    }
+  }
+}

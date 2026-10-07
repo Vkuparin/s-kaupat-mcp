@@ -1,0 +1,56 @@
+{
+  "_note": "Error shapes observed live 2026-10-07. Correlation ids removed.",
+  "persisted_query_not_found (HTTP 200)": {
+    "errors": [
+      {
+        "message": "PersistedQueryNotFound",
+        "extensions": {
+          "code": "PERSISTED_QUERY_NOT_FOUND"
+        }
+      }
+    ]
+  },
+  "introspection_disabled (HTTP 400)": {
+    "errors": [
+      {
+        "message": "GraphQL introspection is not allowed by Apollo Server, but the query contained __schema or __type. To enable introspection, pass introspection: true to ApolloServer in production",
+        "extensions": {
+          "validationErrorCode": "INTROSPECTION_DISABLED",
+          "code": "GRAPHQL_VALIDATION_FAILED"
+        }
+      }
+    ]
+  },
+  "validation_unknown_field (HTTP 400)": {
+    "errors": [
+      {
+        "message": "Field \"weeklyOpeningHours\" of type \"[StoreWeeklyOpeningTime!]\" must have a selection of subfields. Did you mean \"weeklyOpeningHours { ... }\"?",
+        "extensions": {
+          "code": "GRAPHQL_VALIDATION_FAILED"
+        }
+      },
+      {
+        "message": "Cannot query field \"openingHours\" on type \"Store\".",
+        "extensions": {
+          "code": "GRAPHQL_VALIDATION_FAILED"
+        }
+      },
+      {
+        "message": "Cannot query field \"hours\" on type \"Store\".",
+        "extensions": {
+          "code": "GRAPHQL_VALIDATION_FAILED"
+        }
+      }
+    ]
+  },
+  "validation_enum (HTTP 400)": {
+    "errors": [
+      {
+        "message": "Value \"prisma\" does not exist in \"StoreBrand\" enum. Did you mean the enum value \"EPRISMA\" or \"PRISMA\"?",
+        "extensions": {
+          "code": "GRAPHQL_VALIDATION_FAILED"
+        }
+      }
+    ]
+  }
+}

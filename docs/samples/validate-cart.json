@@ -1,0 +1,48 @@
+{
+  "_note": "Captured live 2026-10-08, anonymous POST to https://api.s-kaupat.fi/.",
+  "request": {
+    "operationName": "RemoteGetCompactValidateCart",
+    "variables": {
+      "storeId": "517609418",
+      "date": "2026-10-09",
+      "items": [
+        {
+          "ean": "6414893386488",
+          "itemCount": "2"
+        },
+        {
+          "ean": "0000000000000",
+          "itemCount": "1"
+        }
+      ]
+    },
+    "query": "query RemoteGetCompactValidateCart($items: [PartialCartItemInput!]!, $storeId: ID!, $date: String) { validateCart(partialCartItems: $items, storeId: $storeId, deliveryDate: $date) { storeId isOrderingPossible cartValidationItems { id ean availableQuantity labels { labelType labelText } validationError { __typename ... on ProductAvailabilityError { label labelText isOrderingPossible } ... on ProductNotFoundError { isOrderingPossible } ... on ProductNotInAssortmentError { isOrderingPossible } } } } }"
+  },
+  "response": {
+    "data": {
+      "validateCart": {
+        "storeId": "517609418",
+        "isOrderingPossible": false,
+        "cartValidationItems": [
+          {
+            "id": "517609418-0000000000000",
+            "ean": "0000000000000",
+            "availableQuantity": null,
+            "labels": [],
+            "validationError": {
+              "__typename": "ProductNotFoundError",
+              "isOrderingPossible": false
+            }
+          },
+          {
+            "id": "517609418-6414893386488",
+            "ean": "6414893386488",
+            "availableQuantity": null,
+            "labels": [],
+            "validationError": null
+          }
+        ]
+      }
+    }
+  }
+}

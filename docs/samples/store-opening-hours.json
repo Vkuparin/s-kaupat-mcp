@@ -1,0 +1,102 @@
+{
+  "_note": "Captured live 2026-10-07. Trimmed: first of 3 weeks.",
+  "request": {
+    "operationName": "RemoteStoreOpeningHours",
+    "variables": {
+      "id": "726413330"
+    },
+    "query": "query RemoteStoreOpeningHours($id: ID!) { store(id: $id) { id name weeklyOpeningHours { weekNumber openingTimes { date day mode ranges { open close } } } } }"
+  },
+  "response": {
+    "data": {
+      "store": {
+        "id": "726413330",
+        "name": "Prisma Hämeenkatu Tampere",
+        "weeklyOpeningHours": [
+          {
+            "weekNumber": 41,
+            "openingTimes": [
+              {
+                "date": "2026-10-05",
+                "day": "MON",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "06:00",
+                    "close": "00:00"
+                  }
+                ]
+              },
+              {
+                "date": "2026-10-06",
+                "day": "TUE",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "06:00",
+                    "close": "00:00"
+                  }
+                ]
+              },
+              {
+                "date": "2026-10-07",
+                "day": "WED",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "06:00",
+                    "close": "00:00"
+                  }
+                ]
+              },
+              {
+                "date": "2026-10-08",
+                "day": "THU",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "06:00",
+                    "close": "00:00"
+                  }
+                ]
+              },
+              {
+                "date": "2026-10-09",
+                "day": "FRI",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "06:00",
+                    "close": "00:00"
+                  }
+                ]
+              },
+              {
+                "date": "2026-10-10",
+                "day": "SAT",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "07:00",
+                    "close": "00:00"
+                  }
+                ]
+              },
+              {
+                "date": "2026-10-11",
+                "day": "SUN",
+                "mode": "RANGE",
+                "ranges": [
+                  {
+                    "open": "09:00",
+                    "close": "00:00"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

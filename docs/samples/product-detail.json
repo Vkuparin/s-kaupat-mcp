@@ -1,0 +1,146 @@
+{
+  "_note": "Captured live 2026-10-07/08 with anonymous POST to https://api.s-kaupat.fi/. Trimmed where stated.",
+  "request": {
+    "operationName": "RemoteProductInfo",
+    "variables": {
+      "storeId": "517609418",
+      "id": "6414893386488"
+    },
+    "query": "query RemoteProductInfo($id: ID!, $storeId: ID!) { product(id: $id, storeId: $storeId) { __typename id ean name price brandName slug storeId description ingredientStatement approxPrice basicQuantityUnit priceUnit quantityMultiplier isAgeLimitedByAlcohol frozen packagingLabels supplierName consumerPackageSize isGlobalFallback isNewProduct isForceSalesByCount depositPrice comparisonPrice comparisonUnit availability { label date } countryName { fi } nutrients { name value ri kcal } allergens { allergenTypeCode allergenTypeText levelOfContainmentCode } location { aisle shelf module floor } hierarchyPath { id name slug } pricing { currentPrice comparisonPrice comparisonUnit campaignPrice regularPrice lowest30DayPrice depositPrice campaignPriceValidUntil isApproximatePrice salesUnit } productDetails { productImages { mainImage { urlTemplate } } } } }"
+  },
+  "response": {
+    "data": {
+      "product": {
+        "__typename": "Product",
+        "id": "6414893386488",
+        "ean": "6414893386488",
+        "name": "Kotimaista kevytmaito 1 L",
+        "price": 0.95,
+        "brandName": "Kotimaista",
+        "slug": "kotimaista-kevytmaito-1-l",
+        "storeId": "517609418",
+        "description": "Proteiinit ja kalsium ovat tarpeellisia luuston pysymiselle normaalina. Maitoon lisätty D-vitamiini edistää kalsiumin normaalia hyödyntämistä elimistössä. Maidon riboflaviini eli B2-vitamiini ja B12-vitamiini edistävät hermoston normaalia toimintaa. Lisäksi B2-vitamiini auttaa ihon, limakalvojen ja näön pysymistä normaaleina. Nauti maitoa päivittäin osana monipuolista ja tasapainoista ruokavaliota ja terveellistä elämäntapaa.",
+        "ingredientStatement": "KEVYTMAITO ja D-vitamiini. Maidon alkuperämaa Suomi.",
+        "approxPrice": false,
+        "basicQuantityUnit": "KPL",
+        "priceUnit": "KPL",
+        "quantityMultiplier": 1,
+        "isAgeLimitedByAlcohol": false,
+        "frozen": false,
+        "packagingLabels": [
+          "Hyvää Suomesta (Sininen Joutsen)"
+        ],
+        "supplierName": "Arla Oy",
+        "consumerPackageSize": null,
+        "isGlobalFallback": null,
+        "isNewProduct": false,
+        "isForceSalesByCount": false,
+        "depositPrice": 0,
+        "comparisonPrice": 0.95,
+        "comparisonUnit": "LTR",
+        "availability": null,
+        "countryName": {
+          "fi": "Suomi"
+        },
+        "nutrients": [
+          {
+            "name": "Energia",
+            "value": "196 kJ / 47 kcal",
+            "ri": "2,35%",
+            "kcal": 47
+          },
+          {
+            "name": "Rasvaa",
+            "value": "1,5 g",
+            "ri": "2,14%",
+            "kcal": null
+          },
+          {
+            "name": "- josta tyydyttyneitä rasvoja",
+            "value": "1 g",
+            "ri": "5%",
+            "kcal": null
+          },
+          {
+            "name": "Hiilihydraattia",
+            "value": "4,8 g",
+            "ri": "1,85%",
+            "kcal": null
+          },
+          {
+            "name": "- josta sokereita",
+            "value": "4,8 g",
+            "ri": "5,33%",
+            "kcal": null
+          },
+          {
+            "name": "Proteiinia",
+            "value": "3,5 g",
+            "ri": "7%",
+            "kcal": null
+          },
+          {
+            "name": "Suola",
+            "value": "0,1 g",
+            "ri": "1,67%",
+            "kcal": null
+          }
+        ],
+        "allergens": [
+          {
+            "allergenTypeCode": "AM",
+            "allergenTypeText": "Maito",
+            "levelOfContainmentCode": "CONTAINS"
+          },
+          {
+            "allergenTypeCode": "ML",
+            "allergenTypeText": "Laktoosi",
+            "levelOfContainmentCode": "CONTAINS"
+          }
+        ],
+        "location": {
+          "aisle": "63",
+          "shelf": "1",
+          "module": "01275",
+          "floor": 1
+        },
+        "hierarchyPath": [
+          {
+            "id": "1591691235495235",
+            "name": "Maidot",
+            "slug": "maito-munat-ja-rasvat/maidot-ja-piimat/maidot"
+          },
+          {
+            "id": "Herkku_00000122",
+            "name": "Maidot ja piimät",
+            "slug": "maito-munat-ja-rasvat/maidot-ja-piimat"
+          },
+          {
+            "id": "Herkku_00000006",
+            "name": "Maito, munat ja rasvat",
+            "slug": "maito-munat-ja-rasvat"
+          }
+        ],
+        "pricing": {
+          "currentPrice": 0.95,
+          "comparisonPrice": 0.95,
+          "comparisonUnit": "LTR",
+          "campaignPrice": null,
+          "regularPrice": 0.95,
+          "lowest30DayPrice": null,
+          "depositPrice": null,
+          "campaignPriceValidUntil": null,
+          "isApproximatePrice": false,
+          "salesUnit": "PCE"
+        },
+        "productDetails": {
+          "productImages": {
+            "mainImage": {
+              "urlTemplate": "https://cdn.s-cloud.fi/v1/{MODIFIERS}/assets/dam-id/DyJl47EUq3HBX2A-iCv3Px.{EXTENSION}"
+            }
+          }
+        }
+      }
+    }
+  }
+}

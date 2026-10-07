@@ -2,3 +2,6 @@ node_modules/
 dist/
 *.log
 .env
+
+# S Group query text copied from the site bundle; keep local, regenerate as described in docs/s-kaupat-api.md
+docs/samples/site-operations.graphql

@@ -1,0 +1,16 @@
+{
+  "_note": "Persisted-query hashes observed in the site's own GET requests on 2026-10-08. They change when the site deploys new query text.",
+  "hashes": {
+    "DefaultEventParameters_SelectedSlotAndStore": "d48c492dbc922fd8f51216d36f4c34e6d6f2cedbd8475e4ed80d19a94b622728",
+    "GetBonusWidgetToken": "ca432bbc841c152e9921fd9a8c25c5bb39303748d2884570acd639392430615b",
+    "GetBrandById": "fd5922f474f163d693ca1bb24c3fb2fb56a2f586e579450996ac9e34fe94c458",
+    "GetDeliveryAreaAlcoholSellingStatus": "a3c4ec4652048e52d5db38e41f9ddffc4d2c3a22bd1ebf72fff267d69ae30c02",
+    "GetDeliveryAreaDetails": "618ccf444311694170c7d735b6e289ebd9a582b65d78161aa1b7bfd398e52607",
+    "GetDeliveryAreaWithNextSlot": "0f0a9b424a25144486beeefd87874279a5cf4b86ed19f877803f84784bda0d7c",
+    "RemoteFilteredProducts": "85a4eed2f0a1e3269ac49b94276ca952922568369d85ddd5dcee34481e4c0f91",
+    "RemoteGetCategoryNavigationMenuContent": "251b0aac3125368e16e78bb4eb71c26dc765cbf57af6ef48de91bef7e038a032",
+    "RemoteIsSIDTrackingAllowed": "54a2b0988fbb87039893a302d5f03c05af238ab523129a7fcd3dd07c40feb864",
+    "RemoteStoreCoopInfo": "044c83e7c390cde47c83351c2669ad53b225251018d0053bc7177b20217f6b05",
+    "RemoteUserFavoritesList": "88b4c9acfa611ac2fd9e349a02217d45ce7b4b91cd7c978797a76dad19a66f18"
+  }
+}

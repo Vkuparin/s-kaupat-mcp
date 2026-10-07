@@ -1,0 +1,58 @@
+{
+  "_note": "Captured live 2026-10-08, anonymous POST to https://api.s-kaupat.fi/.",
+  "request": {
+    "operationName": "RemoteProductAvailabilities",
+    "variables": {
+      "storeId": "517609418",
+      "eans": [
+        "6414893386488",
+        "6408430000432"
+      ],
+      "date": "2026-10-09"
+    },
+    "query": "query RemoteProductAvailabilities($storeId: ID!, $eans: [String!]!, $date: String) { store(id: $storeId) { id products(eans: $eans) { items { id ean name inStore availability(date: $date) { date label labelText availableQuantity } store(storeId: $storeId) { sokId pricing(date: $date) { currentPrice regularPrice campaignPrice } labels(date: $date) { labelType labelText } } } } } }"
+  },
+  "response": {
+    "data": {
+      "store": {
+        "id": "517609418",
+        "products": {
+          "items": [
+            {
+              "id": "6414893386488",
+              "ean": "6414893386488",
+              "name": "Kotimaista kevytmaito 1 L",
+              "inStore": null,
+              "availability": null,
+              "store": {
+                "sokId": "100296218",
+                "pricing": {
+                  "currentPrice": 0.95,
+                  "regularPrice": 0.95,
+                  "campaignPrice": null
+                },
+                "labels": []
+              }
+            },
+            {
+              "id": "6408430000432",
+              "ean": "6408430000432",
+              "name": "Valio Hyvä suomalainen Arki® rasvaton maitojuoma 1 l",
+              "inStore": null,
+              "availability": null,
+              "store": {
+                "sokId": "100789136",
+                "pricing": {
+                  "currentPrice": 0.85,
+                  "regularPrice": 0.85,
+                  "campaignPrice": null
+                },
+                "labels": []
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

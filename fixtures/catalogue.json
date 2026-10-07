@@ -1,0 +1,14 @@
+{
+  "_comment": "Synthetic sample data for offline development and tests. Not real S-kaupat data: IDs, prices and addresses are made up.",
+  "stores": [
+    { "id": "fixture-store-1", "name": "Prisma Esimerkki", "brand": "PRISMA", "street": "Testikatu 1", "postalCode": "00100", "city": "Helsinki", "fulfillmentModes": null },
+    { "id": "fixture-store-2", "name": "S-market Malli", "brand": "S_MARKET", "street": "Mallitie 2", "postalCode": "33100", "city": "Tampere", "fulfillmentModes": null },
+    { "id": "fixture-store-3", "name": "Alepa Kokeilu", "brand": "ALEPA", "street": "Kokeilukuja 3", "postalCode": "00500", "city": "Helsinki", "fulfillmentModes": null }
+  ],
+  "products": [
+    { "id": "0000000000017", "name": "Kevytmaito 1 l", "brand": "Esimerkki", "price": 1.09, "campaignPrice": null, "priceBasis": "per_item", "comparisonPrice": 1.09, "comparisonUnit": "L", "packSize": "1 l", "quantityUnit": "KPL", "category": "Maito, munat ja rasvat" },
+    { "id": "0000000000024", "name": "Täysjyväruisleipä 500 g", "brand": "Leipomo Malli", "price": 2.49, "campaignPrice": 1.99, "priceBasis": "per_item", "comparisonPrice": 4.98, "comparisonUnit": "KG", "packSize": "500 g", "quantityUnit": "KPL", "category": "Leivät, keksit ja leivonnaiset" },
+    { "id": "0000000000031", "name": "Banaani", "brand": null, "price": 1.79, "campaignPrice": null, "priceBasis": "per_weight", "comparisonPrice": 1.79, "comparisonUnit": "KG", "packSize": null, "quantityUnit": "KG", "category": "Hedelmät ja vihannekset" },
+    { "id": "0000000000048", "name": "Laktoositon maito 1 l", "brand": "Esimerkki", "price": 1.39, "campaignPrice": null, "priceBasis": "per_item", "comparisonPrice": 1.39, "comparisonUnit": "L", "packSize": "1 l", "quantityUnit": "KPL", "category": "Maito, munat ja rasvat" }
+  ]
+}

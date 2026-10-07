@@ -2,6 +2,12 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { HttpAuthApi } from "./auth/auth-api.js";
+import { FixtureAuth } from "./auth/fixture-auth.js";
+import { BrowserLoginWindow } from "./auth/login-window.js";
+import { LiveAuth } from "./auth/session.js";
+import { createTokenStore, defaultDataDir } from "./auth/token-store.js";
+import type { SKaupatAuth } from "./auth/types.js";
 import { FixtureSKaupatClient } from "./client/fixture-client.js";
 import { HttpSKaupatClient } from "./client/http-client.js";
 import type { SKaupatClient } from "./client/types.js";
@@ -23,8 +29,22 @@ function createClient(): SKaupatClient {
   });
 }
 
+function createAuth(): SKaupatAuth {
+  if ((process.env.SKAUPAT_MODE ?? "live") === "fixtures") return new FixtureAuth();
+  const dataDir = defaultDataDir();
+  const { store, lockPath } = createTokenStore(dataDir);
+  log.info("Login is kept in", { store: store.description });
+  return new LiveAuth({
+    store,
+    lockPath,
+    api: new HttpAuthApi(),
+    window: new BrowserLoginWindow({ profileDir: join(dataDir, "login-browser"), startUrl: process.env.SKAUPAT_LOGIN_URL }),
+    backgroundRenewal: true,
+  });
+}
+
 async function main(): Promise<void> {
-  const server = createServer(createClient());
+  const server = createServer(createClient(), createAuth());
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info(`s-kaupat-mcp ${SERVER_VERSION} ready on stdio`);

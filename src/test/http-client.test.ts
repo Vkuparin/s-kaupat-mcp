@@ -75,3 +75,14 @@ test("store search finds store-like objects", async () => {
   const stores = await client.searchStores({ query: "x", limit: 5 });
   assert.equal(stores[0]?.city, "Helsinki");
 });
+
+test("S-kaupat product errors become product_unavailable", async () => {
+  const client = new HttpSKaupatClient({
+    productSearchHash: "abc",
+    fetchImpl: fakeFetch({ errors: [{ message: "ProductNotInAssortmentError: not sold here" }] }),
+  });
+  await assert.rejects(
+    client.searchProducts({ storeId: "1", query: "a", limit: 1 }),
+    (e: SKaupatError) => e.code === "product_unavailable" && e.userMessage.en === "This product is not available in this store.",
+  );
+});

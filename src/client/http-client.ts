@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SKaupatError } from "../errors.js";
+import { isProductUnavailableError, SKaupatError } from "../errors.js";
 import { log } from "../log.js";
 import type {
   GetProductsInput,
@@ -136,7 +136,7 @@ export class HttpSKaupatClient implements SKaupatClient {
     }
     const store = parsed.data.data.store;
     if (!store) {
-      throw new SKaupatError("unavailable", `Store ${storeId} was not found.`, { storeId });
+      throw new SKaupatError("store_not_found", `Store ${storeId} was not found.`, { storeId });
     }
     return {
       storeId,
@@ -208,6 +208,10 @@ export class HttpSKaupatClient implements SKaupatClient {
           "unsupported",
           `The configured hash for ${operationName} is no longer accepted by S-kaupat; capture a fresh one.`,
         );
+      }
+      const productError = errors.data.errors.find(isProductUnavailableError);
+      if (productError) {
+        throw new SKaupatError("product_unavailable", productError.message ?? "Product is not available.");
       }
       // Partial data with errors is still usable; fall through when data exists.
       if (!(body as { data?: unknown }).data) {

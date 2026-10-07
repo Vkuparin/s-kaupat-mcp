@@ -68,7 +68,7 @@ export class FixtureSKaupatClient implements SKaupatClient {
 
   private requireStore(storeId: string): void {
     if (!this.catalogue.stores.some((s) => s.id === storeId)) {
-      throw new SKaupatError("unavailable", `Store ${storeId} was not found.`, { storeId });
+      throw new SKaupatError("store_not_found", `Store ${storeId} was not found.`, { storeId });
     }
   }
 

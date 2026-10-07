@@ -171,3 +171,13 @@ test("getStores batches IDs into one request and maps opening hours", async () =
   assert.equal(stores.get("517609418")?.chain, "PRISMA");
   assert.equal(stores.has("999"), false);
 });
+
+test("S-kaupat product errors become product_unavailable", async () => {
+  const client = new HttpSKaupatClient({
+    fetchImpl: fakeFetch({ errors: [{ message: "ProductNotInAssortmentError: not sold here" }] }),
+  });
+  await assert.rejects(
+    client.searchProducts({ storeId: "1", query: "a", limit: 1 }),
+    (e: SKaupatError) => e.code === "product_unavailable" && e.userMessage.en === "This product is not available in this store.",
+  );
+});

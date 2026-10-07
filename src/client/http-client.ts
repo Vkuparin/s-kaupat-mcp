@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SKaupatError, storeNotFound } from "../errors.js";
+import { isProductUnavailableError, SKaupatError, storeNotFound } from "../errors.js";
 import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type {
@@ -289,6 +289,10 @@ export class HttpSKaupatClient implements SKaupatClient {
     const errors = GraphQLErrorsSchema.safeParse(body);
     if (errors.success && errors.data.errors.length > 0) {
       const first = errors.data.errors[0];
+      const productError = errors.data.errors.find(isProductUnavailableError);
+      if (productError) {
+        throw new SKaupatError("product_unavailable", productError.message ?? "Product is not available.");
+      }
       // Partial data with errors is still usable; fall through when data exists.
       if (!(body as { data?: unknown }).data) {
         throw new SKaupatError("upstream_error", first?.message ?? "S-kaupat returned a GraphQL error.");

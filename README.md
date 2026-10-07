@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.2.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.3.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Tools
 
@@ -129,9 +129,32 @@ Before writing, the server looks up all products in one request (S-kaupat needs 
 
 Not yet checked against the live site: the exact shape of list reads (written from the website's own query text), and whether S-kaupat accepts the list item fields it showed in a test (`ean`, `sokId`, `name`, `quantity`, `isReplaceable`) from outside the browser. Updating an item's quantity is a remove and re-add, because S-kaupat's item update input is not mapped yet.
 
-## Setup
+## Install in Claude Desktop (one click)
+
+The easiest way is the extension file, `s-kaupat-<version>.mcpb`. It contains everything, including its own copy of the libraries it needs; Claude Desktop runs it with its built-in Node.js.
+
+1. Get the file: download it from the repository's releases, or build it yourself with `npm run pack:extension` (see below).
+2. Double-click the file, or open Claude Desktop → **Settings → Extensions** and drag the file in.
+3. Press **Install**. That's it: ask Claude, for example, "Etsi Prisma Tampereelta ja valitse se kaupakseni".
+
+Optional: in the extension's settings, **Demo mode** uses built-in sample stores and products, so you can try it without S-kaupat or a login.
+
+To use shopping lists, ask Claude to log you in to S-kaupat (or use your app's "Log in" button). A small S-kaupat window opens once; Microsoft Edge or Google Chrome must be installed.
+
+To update, install the newer `.mcpb` file the same way. To remove, use the extension's menu in Settings → Extensions.
+
+### Building the extension file
 
 Requires Node.js 20 or newer.
+
+```bash
+npm install
+npm run pack:extension
+```
+
+This builds the server, stages it with only its runtime dependencies in `build/extension`, validates `manifest.json` and writes `s-kaupat-<version>.mcpb` in the repository root. The version comes from `package.json` and must match `manifest.json` (a test checks this and that the manifest lists every tool).
+
+## Development
 
 ```bash
 npm install
@@ -145,25 +168,9 @@ Try it interactively with the MCP Inspector:
 npm run inspect
 ```
 
-## Claude Desktop
+### Claude Desktop from a checkout (developers)
 
-Open Claude Desktop → Settings → Developer → Edit Config, and add the server to `claude_desktop_config.json`. Use the absolute path to `dist/index.js` in your checkout.
-
-Offline sample data (works right away, no network):
-
-```json
-{
-  "mcpServers": {
-    "s-kaupat": {
-      "command": "node",
-      "args": ["D:\\AIstuff\\repos\\s-kaupat-mcp\\dist\\index.js"],
-      "env": { "SKAUPAT_MODE": "fixtures" }
-    }
-  }
-}
-```
-
-Live S-kaupat (no configuration needed):
+Instead of the extension, you can point Claude Desktop at a checkout: Settings → Developer → Edit Config, then add the server to `claude_desktop_config.json` with the absolute path to `dist/index.js`:
 
 ```json
 {
@@ -176,13 +183,14 @@ Live S-kaupat (no configuration needed):
 }
 ```
 
-On macOS or Linux use a normal path such as `/Users/you/s-kaupat-mcp/dist/index.js`. Restart Claude Desktop after editing the config. Server logs go to stderr and show up in Claude Desktop's MCP logs.
+Add `"env": { "SKAUPAT_MODE": "fixtures" }` for offline sample data. On macOS or Linux use a normal path such as `/Users/you/s-kaupat-mcp/dist/index.js`. Restart Claude Desktop after editing the config. Server logs go to stderr and show up in Claude Desktop's MCP logs.
 
 ## Configuration
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `SKAUPAT_MODE` | `live` | `live` calls S-kaupat; `fixtures` serves `fixtures/catalogue.json` with no network |
+| `SKAUPAT_DEMO` | off | `true` is the same as `SKAUPAT_MODE=fixtures` (the extension's Demo mode switch) |
 | `SKAUPAT_FIXTURES` | `fixtures/catalogue.json` | Alternative fixture catalogue |
 | `SKAUPAT_SETTINGS_FILE` | `%APPDATA%\s-kaupat-mcp\settings.json` on Windows, `~/.config/s-kaupat-mcp/settings.json` elsewhere | Where the selected store is saved (no credentials) |
 | `SKAUPAT_DATA_DIR` | `%LOCALAPPDATA%\s-kaupat-mcp` on Windows, `~/.config/s-kaupat-mcp` elsewhere | Lock file, token file and the login window's browser profile |
@@ -220,12 +228,15 @@ src/
     auth-api.ts          S-kaupat token renewal and profile calls
     fixture-auth.ts      pretend login for fixture mode
   test/                  node:test suites (no network)
-fixtures/catalogue.json  synthetic sample catalogue
+fixtures/catalogue.json  synthetic sample catalogue (also the extension's Demo mode)
 fixtures/api/            trimmed live API responses used by tests
+docs/samples/            live API captures, also parsed by tests
+manifest.json            Claude Desktop extension manifest
+scripts/pack-extension.mjs  builds the .mcpb extension file
 ```
 
 The MCP layer depends only on the `SKaupatClient` interface, so the transport chosen in S0 (direct HTTP, managed browser or extension) can replace `http-client.ts` without changing the tools.
 
 ## Not included yet
 
-Packaged releases. Order placement and payment are deliberately left out. See the plan.
+Published releases (the `.mcpb` file is built locally for now). Order placement and payment are deliberately left out. See the plan.

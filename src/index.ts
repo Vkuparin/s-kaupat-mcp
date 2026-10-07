@@ -16,8 +16,14 @@ import { log } from "./log.js";
 import { defaultSettingsPath, FileStoreSelection } from "./selection.js";
 import { createServer, SERVER_VERSION } from "./server.js";
 
+/** SKAUPAT_DEMO=true is the Claude Desktop extension's "Demo mode" switch, same as SKAUPAT_MODE=fixtures. */
+function serverMode(): string {
+  if (process.env.SKAUPAT_DEMO === "true") return "fixtures";
+  return process.env.SKAUPAT_MODE ?? "live";
+}
+
 function createClient(): SKaupatClient & ShoppingListApi {
-  const mode = process.env.SKAUPAT_MODE ?? "live";
+  const mode = serverMode();
   if (mode === "fixtures") {
     const here = dirname(fileURLToPath(import.meta.url));
     const path = process.env.SKAUPAT_FIXTURES ?? join(here, "..", "fixtures", "catalogue.json");
@@ -29,7 +35,7 @@ function createClient(): SKaupatClient & ShoppingListApi {
 }
 
 function createAuth(): SKaupatAuth {
-  if ((process.env.SKAUPAT_MODE ?? "live") === "fixtures") return new FixtureAuth();
+  if (serverMode() === "fixtures") return new FixtureAuth();
   const dataDir = defaultDataDir();
   const { store, lockPath } = createTokenStore(dataDir);
   log.info("Login is kept in", { store: store.description });

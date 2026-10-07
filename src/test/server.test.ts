@@ -12,7 +12,7 @@ import { SKaupatError } from "../errors.js";
 import { FixtureSKaupatClient } from "../client/fixture-client.js";
 import { HttpSKaupatClient } from "../client/http-client.js";
 import { FileStoreSelection, type StoreSelection } from "../selection.js";
-import { createServer } from "../server.js";
+import { createServer, SERVER_VERSION } from "../server.js";
 import type { SKaupatClient } from "../client/types.js";
 import type { ShoppingListApi } from "../lists/types.js";
 
@@ -293,4 +293,13 @@ test("browse_category pages through a category, cheapest first", async () => {
   assert.deepEqual(data.products.map((p: any) => p.price), [0.69, 1.09]);
   const next = await call(mcp, "browse_category", { storeId: "fixture-store-1", slug: "maito-munat-ja-rasvat", sort: "price_asc", limit: 2, offset: 2 });
   assert.deepEqual(next.data.products.map((p: any) => p.price), [1.39]);
+});
+
+test("the Claude Desktop extension manifest lists exactly the server's tools", async () => {
+  const manifest = JSON.parse(readFileSync(join(dirname(fixtures), "..", "manifest.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(dirname(fixtures), "..", "package.json"), "utf8"));
+  const { tools } = await (await connect()).listTools();
+  assert.deepEqual(manifest.tools.map((t: any) => t.name).sort(), tools.map((t) => t.name).sort());
+  assert.equal(manifest.version, pkg.version);
+  assert.equal(manifest.version, SERVER_VERSION);
 });

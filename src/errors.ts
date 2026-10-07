@@ -4,6 +4,8 @@
  */
 export type ErrorCode =
   | "invalid_argument"
+  | "store_not_selected"
+  | "store_not_found"
   | "auth_required"
   | "session_expired"
   | "blocked"
@@ -20,10 +22,30 @@ export class SKaupatError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly details?: Record<string, unknown>,
+    /** Short Finnish version of `message`, for apps that show errors to end users. */
+    readonly messageFi?: string,
   ) {
     super(message);
     this.name = "SKaupatError";
   }
+}
+
+export function storeNotSelected(): SKaupatError {
+  return new SKaupatError(
+    "store_not_selected",
+    "Choose your store first.",
+    undefined,
+    "Valitse ensin oma kauppasi.",
+  );
+}
+
+export function storeNotFound(storeId: string): SKaupatError {
+  return new SKaupatError(
+    "store_not_found",
+    "That store was not found. Choose your store again.",
+    { storeId },
+    "Kauppaa ei löytynyt. Valitse kauppa uudelleen.",
+  );
 }
 
 export function toSKaupatError(err: unknown): SKaupatError {

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SKaupatError } from "../errors.js";
 import { log } from "../log.js";
+import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type {
   GetProductsInput,
   Product,
@@ -11,18 +12,18 @@ import type {
   SearchStoresInput,
   SKaupatClient,
   Store,
+  StoreDetails,
+  StoreSearchResult,
 } from "./types.js";
 
 /**
  * Direct HTTP client for S-kaupat's public catalogue API.
  *
- * S-kaupat's web app talks to a GraphQL API using persisted queries: each
- * request sends an operation name plus the SHA-256 hash of a query the server
- * already knows. Hashes change when S-kaupat deploys, so they are supplied by
- * configuration for now. Whether this route is reliable enough, or whether a
- * managed browser session is needed, is the S0 feasibility decision in
- * docs/s-kaupat-mcp-plan.md. Response parsing below is UNVERIFIED against live
- * traffic and must be checked against sanitized fixtures before release.
+ * The API accepts this client's own GraphQL query text without login (live-
+ * verified 2026-10-07, see docs/s-kaupat-api.md). Store queries use that.
+ * Product search still uses the website's persisted query hash and moves to
+ * own query text separately. Store response shapes follow the captured samples
+ * in docs/samples; product parsing is still unverified against live traffic.
  */
 
 export interface HttpClientOptions {
@@ -31,15 +32,26 @@ export interface HttpClientOptions {
   timeoutMs?: number;
   /** Persisted query hash for the product search operation. */
   productSearchHash?: string;
-  /** Persisted query hash for the store search operation. */
-  storeSearchHash?: string;
   fetchImpl?: typeof fetch;
 }
 
 const OPERATIONS = {
   productSearch: "RemoteFilteredProducts",
-  storeSearch: "RemoteStoreSearch",
 } as const;
+
+/** searchStores returns 24 stores per page. Cap paging so one call stays a few requests. */
+const STORE_PAGE_SIZE = 24;
+const MAX_STORE_PAGES = 3;
+
+const STORE_SEARCH_QUERY = `query RemoteStoreSearch($query: String, $brand: StoreBrand, $cursor: String) {
+  searchStores(query: $query, brand: $brand, cursor: $cursor) {
+    totalCount cursor
+    stores { id name brand domains
+      location { address { street { default } postcode postcodeName { default } } coordinates { lat lon } } }
+  }
+}`;
+
+const STORE_DETAIL_FIELDS = "id name brand weeklyOpeningHours { openingTimes { date day mode ranges { open close } } }";
 
 const PricingSchema = z
   .object({
@@ -110,10 +122,56 @@ export class HttpSKaupatClient implements SKaupatClient {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
-  async searchStores({ query, limit }: SearchStoresInput): Promise<Store[]> {
-    const hash = this.requireHash(this.options.storeSearchHash, "SKAUPAT_STORE_SEARCH_HASH", OPERATIONS.storeSearch);
-    const raw = await this.query(OPERATIONS.storeSearch, hash, { query, brand: null, cursor: null });
-    return extractStores(raw).slice(0, limit);
+  async searchStores({ query, chain, limit }: SearchStoresInput): Promise<StoreSearchResult> {
+    const stores: Store[] = [];
+    let total: number | null = null;
+    let cursor: string | null = null;
+    for (let page = 0; page < MAX_STORE_PAGES && stores.length < limit; page++) {
+      const raw = await this.post("RemoteStoreSearch", STORE_SEARCH_QUERY, {
+        query: query ?? null,
+        brand: chain ?? null,
+        cursor,
+      });
+      const parsed = StoreSearchResponseSchema.safeParse(raw);
+      if (!parsed.success) {
+        log.warn("Unexpected store search response", { issues: parsed.error.issues.slice(0, 3) });
+        throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected store search response.");
+      }
+      const result = parsed.data.data.searchStores;
+      total = result.totalCount ?? total;
+      stores.push(...result.stores.map(mapStore));
+      cursor = result.cursor ?? null;
+      if (!cursor || result.stores.length < STORE_PAGE_SIZE) break;
+    }
+    return { total, stores: stores.slice(0, limit) };
+  }
+
+  /** Fetches several stores in one request using GraphQL aliases (s0, s1, …). */
+  async getStores(ids: string[]): Promise<Map<string, StoreDetails>> {
+    const unique = [...new Set(ids)];
+    const found = new Map<string, StoreDetails>();
+    if (unique.length === 0) return found;
+    const params = unique.map((_, i) => `$s${i}: ID!`).join(", ");
+    const fields = unique.map((_, i) => `s${i}: store(id: $s${i}) { ${STORE_DETAIL_FIELDS} }`).join(" ");
+    const variables = Object.fromEntries(unique.map((id, i) => [`s${i}`, id]));
+    const raw = await this.post("RemoteStores", `query RemoteStores(${params}) { ${fields} }`, variables);
+    const data = (raw as { data?: Record<string, unknown> | null }).data ?? {};
+    unique.forEach((id, i) => {
+      const parsed = ApiStoreDetailSchema.nullish().safeParse(data[`s${i}`]);
+      if (!parsed.success) {
+        log.warn("Unexpected store response", { storeId: id, issues: parsed.error.issues.slice(0, 3) });
+        return;
+      }
+      const s = parsed.data;
+      if (!s) return;
+      found.set(id, {
+        id: s.id,
+        name: s.name,
+        chain: chainCode(s.brand),
+        openingHours: (s.weeklyOpeningHours ?? []).flatMap((w) => w.openingTimes.map(toOpeningDay)),
+      });
+    });
+    return found;
   }
 
   async searchProducts({ storeId, query, limit }: SearchProductsInput): Promise<ProductSearchResult> {
@@ -176,6 +234,7 @@ export class HttpSKaupatClient implements SKaupatClient {
     );
   }
 
+  /** GET with a persisted query hash, as the website does. */
   private async query(operationName: string, hash: string, variables: Record<string, unknown>): Promise<unknown> {
     const url = new URL(this.apiUrl);
     url.searchParams.set("operationName", operationName);
@@ -183,14 +242,32 @@ export class HttpSKaupatClient implements SKaupatClient {
     url.searchParams.set("extensions", JSON.stringify({ persistedQuery: { version: 1, sha256Hash: hash } }));
 
     log.debug("GraphQL request", { operationName, variables });
-    const response = await this.fetchImpl(url, {
+    return this.send(operationName, url, {
       headers: {
         Accept: "application/json",
         Origin: this.origin,
         Referer: `${this.origin}/`,
       },
-      signal: AbortSignal.timeout(this.timeoutMs),
     });
+  }
+
+  /** POST with this client's own query text. */
+  private async post(operationName: string, query: string, variables: Record<string, unknown>): Promise<unknown> {
+    log.debug("GraphQL request", { operationName, variables });
+    return this.send(operationName, new URL(this.apiUrl), {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        Origin: this.origin,
+        Referer: `${this.origin}/`,
+      },
+      body: JSON.stringify({ operationName, query, variables }),
+    });
+  }
+
+  private async send(operationName: string, url: URL, init: RequestInit): Promise<unknown> {
+    const response = await this.fetchImpl(url, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
 
     if (response.status === 403 || response.status === 429) {
       throw new SKaupatError("blocked", `S-kaupat refused the request (HTTP ${response.status}).`);
@@ -249,6 +326,7 @@ const ApiStoreSchema = z
     id: z.string(),
     name: z.string(),
     brand: z.string().nullish(),
+    domains: z.array(z.string()).nullish(),
     location: z
       .object({
         address: z
@@ -259,45 +337,61 @@ const ApiStoreSchema = z
           })
           .passthrough()
           .nullish(),
+        // S-kaupat sends coordinates as strings, e.g. "61.492234".
+        coordinates: z.object({ lat: z.coerce.number(), lon: z.coerce.number() }).passthrough().nullish(),
       })
       .passthrough()
       .nullish(),
   })
   .passthrough();
 
-/**
- * The store search response is expected at data.searchStores.stores (see
- * docs/s-kaupat-api.md) but has not been captured live yet, so this looks for
- * the first array of store-like objects anywhere in `data`. Replace with an
- * exact schema once a sanitized fixture exists.
- */
-function extractStores(raw: unknown): Store[] {
-  const data = (raw as { data?: unknown })?.data;
-  const queue: unknown[] = [data];
-  while (queue.length > 0) {
-    const node = queue.shift();
-    if (Array.isArray(node)) {
-      const parsed = node.map((item) => ApiStoreSchema.safeParse(item));
-      if (parsed.length > 0 && parsed.every((r) => r.success)) {
-        return parsed.map((r) => mapStore(r.data!));
-      }
-      queue.push(...node);
-    } else if (node && typeof node === "object") {
-      queue.push(...Object.values(node));
-    }
-  }
-  throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected store search response.");
-}
+const StoreSearchResponseSchema = z.object({
+  data: z.object({
+    searchStores: z.object({
+      totalCount: z.number().nullish(),
+      cursor: z.string().nullish(),
+      stores: z.array(ApiStoreSchema),
+    }),
+  }),
+});
+
+const ApiStoreDetailSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    brand: z.string().nullish(),
+    weeklyOpeningHours: z
+      .array(
+        z.object({
+          openingTimes: z.array(
+            z.object({
+              date: z.string(),
+              day: z.string(),
+              mode: z.string().nullish(),
+              ranges: z.array(z.object({ open: z.string(), close: z.string() })).nullish(),
+            }),
+          ),
+        }),
+      )
+      .nullish(),
+  })
+  .passthrough();
 
 function mapStore(s: z.infer<typeof ApiStoreSchema>): Store {
   const address = s.location?.address;
+  const coords = s.location?.coordinates;
+  const chain = chainCode(s.brand);
   return {
     id: s.id,
     name: s.name,
-    brand: s.brand ?? null,
+    chain,
+    chainName: chainName(chain),
     street: address?.street?.default ?? null,
     postalCode: address?.postcode ?? null,
     city: address?.postcodeName?.default ?? null,
-    fulfillmentModes: null,
+    coordinates:
+      coords && Number.isFinite(coords.lat) && Number.isFinite(coords.lon) ? { lat: coords.lat, lon: coords.lon } : null,
+    // domains is ["S_KAUPAT"] for some stores and [] for others; most likely online ordering (unconfirmed).
+    onlineOrdering: s.domains ? s.domains.includes("S_KAUPAT") : null,
   };
 }

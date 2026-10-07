@@ -1,9 +1,9 @@
 {
   "_comment": "Synthetic sample data for offline development and tests. Not real S-kaupat data: IDs, prices and addresses are made up.",
   "stores": [
-    { "id": "fixture-store-1", "name": "Prisma Esimerkki", "brand": "PRISMA", "street": "Testikatu 1", "postalCode": "00100", "city": "Helsinki", "fulfillmentModes": null },
-    { "id": "fixture-store-2", "name": "S-market Malli", "brand": "S_MARKET", "street": "Mallitie 2", "postalCode": "33100", "city": "Tampere", "fulfillmentModes": null },
-    { "id": "fixture-store-3", "name": "Alepa Kokeilu", "brand": "ALEPA", "street": "Kokeilukuja 3", "postalCode": "00500", "city": "Helsinki", "fulfillmentModes": null }
+    { "id": "fixture-store-1", "name": "Prisma Esimerkki Helsinki", "chain": "PRISMA", "chainName": "Prisma", "street": "Testikatu 1", "postalCode": "00100", "city": "Helsinki", "coordinates": { "lat": 60.17, "lon": 24.94 }, "onlineOrdering": true, "hours": "ALL_DAY" },
+    { "id": "fixture-store-2", "name": "S-market Malli Tampere", "chain": "S_MARKET", "chainName": "S-market", "street": "Mallitie 2", "postalCode": "33100", "city": "Tampere", "coordinates": { "lat": 61.5, "lon": 23.76 }, "onlineOrdering": true, "hours": { "open": "07:00", "close": "22:00" } },
+    { "id": "fixture-store-3", "name": "Alepa Kokeilu Helsinki", "chain": "ALEPA", "chainName": "Alepa", "street": "Kokeilukuja 3", "postalCode": "00500", "city": "Helsinki", "coordinates": { "lat": 60.19, "lon": 24.95 }, "onlineOrdering": false, "hours": { "open": "07:00", "close": "23:00" } }
   ],
   "products": [
     { "id": "0000000000017", "name": "Kevytmaito 1 l", "brand": "Esimerkki", "price": 1.09, "campaignPrice": null, "priceBasis": "per_item", "comparisonPrice": 1.09, "comparisonUnit": "L", "packSize": "1 l", "quantityUnit": "KPL", "category": "Maito, munat ja rasvat" },

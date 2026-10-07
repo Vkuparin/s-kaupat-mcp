@@ -5,17 +5,63 @@
  * Rule from the plan: unknown fields stay unknown (null), never guessed.
  */
 
+/** Chain codes S-kaupat's store search accepts as a filter (StoreBrand enum). */
+export const STORE_CHAINS = [
+  "PRISMA",
+  "EPRISMA",
+  "S_MARKET",
+  "SALE",
+  "ALEPA",
+  "ABC",
+  "HERKKU",
+  "SOKOS_HERKKU",
+  "MESTARIN_HERKKU",
+] as const;
+export type StoreChain = (typeof STORE_CHAINS)[number];
+
 export interface Store {
   /** Stable S-kaupat store (branch) ID, used as context for product calls. */
   id: string;
+  /** Display name, e.g. "Prisma Kaleva Tampere". */
   name: string;
-  /** Chain brand, e.g. "PRISMA", "S_MARKET", "ALEPA", when known. */
-  brand: string | null;
+  /** Chain code, e.g. "PRISMA", "S_MARKET", "ALEPA", when known. */
+  chain: string | null;
+  /** Chain display name, e.g. "Prisma", "S-market", when known. */
+  chainName: string | null;
   street: string | null;
   postalCode: string | null;
   city: string | null;
-  /** Fulfillment modes when known, e.g. "pickup", "delivery". Null = unknown. */
-  fulfillmentModes: string[] | null;
+  /** Coordinates when known, so an app can sort or map stores by distance. */
+  coordinates: { lat: number; lon: number } | null;
+  /** Whether the store takes online grocery orders on S-kaupat. Null = unknown. */
+  onlineOrdering: boolean | null;
+}
+
+export type OpeningStatus = "open" | "open_24h" | "closed" | "unknown";
+
+export interface OpeningDay {
+  /** Local date in Finland, YYYY-MM-DD. */
+  date: string;
+  /** MON … SUN. */
+  day: string;
+  status: OpeningStatus;
+  /** Opening ranges as local times, e.g. { open: "06:00", close: "00:00" }. Empty unless status is "open". */
+  ranges: { open: string; close: string }[];
+}
+
+/** Store details that come from a per-store lookup rather than search. */
+export interface StoreDetails {
+  id: string;
+  name: string;
+  chain: string | null;
+  /** Upcoming days as S-kaupat reports them (about three weeks), oldest first. */
+  openingHours: OpeningDay[];
+}
+
+export interface StoreSearchResult {
+  /** Total matching stores reported by S-kaupat, when known. */
+  total: number | null;
+  stores: Store[];
 }
 
 export type PriceBasis = "per_item" | "per_weight" | "unknown";
@@ -66,7 +112,9 @@ export interface ProductsResult {
 }
 
 export interface SearchStoresInput {
-  query: string;
+  /** Free text: store name, city or postal code. Omit to list all stores. */
+  query?: string;
+  chain?: StoreChain;
   limit: number;
 }
 
@@ -87,7 +135,9 @@ export interface GetProductsInput {
  * S0 without touching tool definitions.
  */
 export interface SKaupatClient {
-  searchStores(input: SearchStoresInput): Promise<Store[]>;
+  searchStores(input: SearchStoresInput): Promise<StoreSearchResult>;
+  /** Looks up stores by ID. Unknown IDs are missing from the returned map. */
+  getStores(ids: string[]): Promise<Map<string, StoreDetails>>;
   searchProducts(input: SearchProductsInput): Promise<ProductSearchResult>;
   getProducts(input: GetProductsInput): Promise<ProductsResult>;
 }

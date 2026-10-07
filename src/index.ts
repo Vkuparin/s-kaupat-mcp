@@ -6,6 +6,7 @@ import { FixtureSKaupatClient } from "./client/fixture-client.js";
 import { HttpSKaupatClient } from "./client/http-client.js";
 import type { SKaupatClient } from "./client/types.js";
 import { log } from "./log.js";
+import { defaultSettingsPath, FileStoreSelection } from "./selection.js";
 import { createServer, SERVER_VERSION } from "./server.js";
 
 function createClient(): SKaupatClient {
@@ -19,12 +20,12 @@ function createClient(): SKaupatClient {
   if (mode !== "live") throw new Error(`Unknown SKAUPAT_MODE: ${mode} (expected "live" or "fixtures")`);
   return new HttpSKaupatClient({
     productSearchHash: process.env.SKAUPAT_PRODUCT_SEARCH_HASH,
-    storeSearchHash: process.env.SKAUPAT_STORE_SEARCH_HASH,
   });
 }
 
 async function main(): Promise<void> {
-  const server = createServer(createClient());
+  const selection = new FileStoreSelection(process.env.SKAUPAT_SETTINGS_FILE ?? defaultSettingsPath());
+  const server = createServer(createClient(), { selection });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info(`s-kaupat-mcp ${SERVER_VERSION} ready on stdio`);

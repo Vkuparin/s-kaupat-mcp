@@ -27,13 +27,17 @@ export async function withFileLock<T>(path: string, fn: () => Promise<T>, option
       }
       break;
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
+      const code = (err as NodeJS.ErrnoException).code;
+      // On Windows, opening a lock file that its holder is deleting at that moment fails with EPERM
+      // (or EACCES/EBUSY) instead of EEXIST; it means the same thing: someone holds the lock.
+      const contended = code === "EEXIST" || (process.platform === "win32" && ["EPERM", "EACCES", "EBUSY"].includes(code ?? ""));
+      if (!contended) throw err;
       const age = await stat(path).then((s) => Date.now() - s.mtimeMs, () => 0);
       if (age > staleMs) {
         await unlink(path).catch(() => {});
         continue;
       }
-      if (Date.now() > deadline) throw new Error(`Timed out waiting for lock ${path}`);
+      if (Date.now() > deadline) throw new Error(`Timed out waiting for lock ${path} (last error ${code})`);
       await new Promise((r) => setTimeout(r, pollMs));
     }
   }

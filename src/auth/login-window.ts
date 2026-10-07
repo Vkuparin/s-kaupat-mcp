@@ -96,9 +96,11 @@ export class BrowserLoginWindow implements LoginWindow {
           ...candidate,
           headless: this.options.headless ?? false,
           viewport: null,
-          // Without this the window shows a "controlled by automated test software" bar, which confuses users.
-          ignoreDefaultArgs: ["--enable-automation"],
-          args: ["--window-size=520,820", "--no-first-run", "--no-default-browser-check"],
+          // Playwright's default flags tune the browser for test automation (and show a "controlled by
+          // automated test software" bar). The login window should be a plain browser, so only the
+          // flags it needs are passed.
+          ignoreDefaultArgs: true,
+          args: browserArgs(this.options.profileDir, this.options.headless ?? false),
         });
       } catch (err) {
         const message = err instanceof Error ? err.message.split("\n")[0]! : String(err);
@@ -113,6 +115,22 @@ export class BrowserLoginWindow implements LoginWindow {
       `No usable browser for the login window (needs Microsoft Edge or Google Chrome, or SKAUPAT_BROWSER_PATH). ${errors.join("; ")}`,
     );
   }
+}
+
+function browserArgs(profileDir: string, headless: boolean): string[] {
+  return [
+    `--user-data-dir=${profileDir}`,
+    "--remote-debugging-pipe",
+    "--window-size=520,820",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--disable-sync",
+    // Edge otherwise signs a new profile in with the Windows Microsoft account. This profile should
+    // only ever hold the S-kaupat login.
+    "--disable-features=msImplicitSignin",
+    ...(headless ? ["--headless", "--no-sandbox"] : []),
+    "about:blank",
+  ];
 }
 
 /** Looks through localStorage entries for an object holding a non-empty refreshToken. */

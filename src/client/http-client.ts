@@ -57,7 +57,9 @@ const STORE_SEARCH_QUERY = `query RemoteStoreSearch($query: String, $brand: Stor
   }
 }`;
 
-const STORE_DETAIL_FIELDS = "id name brand weeklyOpeningHours { openingTimes { date day mode ranges { open close } } }";
+/** The same Store type as in searchStores, so the address comes with it (select_store may run without a search). */
+const STORE_DETAIL_FIELDS =
+  "id name brand domains location { address { street { default } postcode postcodeName { default } } coordinates { lat lon } } weeklyOpeningHours { openingTimes { date day mode ranges { open close } } }";
 
 /** Product fields shared by search, category browsing and lookups by EAN (all seen in docs/samples). */
 const PRODUCT_FIELDS =
@@ -306,6 +308,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
         id: s.id,
         name: s.name,
         chain: chainCode(s.brand),
+        ...(s.location ? { store: mapStore(s) } : {}),
         openingHours: (s.weeklyOpeningHours ?? []).flatMap((w) => w.openingTimes.map(toOpeningDay)),
       });
     });
@@ -737,11 +740,8 @@ const StoreSearchResponseSchema = z.object({
   }),
 });
 
-const ApiStoreDetailSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    brand: z.string().nullish(),
+const ApiStoreDetailSchema = ApiStoreSchema
+  .extend({
     weeklyOpeningHours: z
       .array(
         z.object({

@@ -176,7 +176,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const details = (await client.getStores([storeId])).get(storeId);
         if (!details) throw storeNotFound(storeId);
         const store: SavedStore = {
-          ...(seenStores.get(storeId) ?? storeFromDetails(details)),
+          ...(details.store ?? seenStores.get(storeId) ?? storeFromDetails(details)),
           selectedAt: now().toISOString(),
         };
         selection.set(store);
@@ -984,6 +984,7 @@ async function tryGetStores(client: SKaupatClient, ids: string[]): Promise<Map<s
 }
 
 function storeFromDetails(d: StoreDetails): Store {
+  if (d.store) return d.store;
   return {
     id: d.id,
     name: d.name,

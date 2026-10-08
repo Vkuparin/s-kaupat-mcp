@@ -10,7 +10,7 @@ import type { SKaupatAuth } from "./auth/types.js";
 import { createBrowserFetch } from "./browser/browser-fetch.js";
 import { BrowserSession } from "./browser/session.js";
 import { HttpCheckoutApi } from "./checkout/http.js";
-import { FileOrderStore } from "./checkout/order-store.js";
+import { FileOrderStore, MemoryOrderStore } from "./checkout/order-store.js";
 import type { CheckoutApi } from "./checkout/types.js";
 import { FixtureSKaupatClient } from "./client/fixture-client.js";
 import { DemoCheckout } from "./demo/checkout.js";
@@ -40,7 +40,8 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   setDebugLogging(config.debug);
   const selection: StoreSelection = new FileStoreSelection(config.settingsFile);
   const { client, auth, browser, checkout } = config.mode === "demo" ? demoParts(config) : liveParts(config);
-  const orders = new FileOrderStore(join(config.dataDir, config.mode === "demo" ? "demo-orders.json" : "orders.json"));
+  // Demo orders live only in memory (DemoCheckout), so their tokens must not outlive the process either.
+  const orders = config.mode === "demo" ? new MemoryOrderStore() : new FileOrderStore(join(config.dataDir, "orders.json"));
   const site: SiteWindow | undefined = browser
     ? {
         open: (url) => browser.openForUser(url),

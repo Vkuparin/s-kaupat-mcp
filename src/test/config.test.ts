@@ -60,3 +60,9 @@ test("--help and --version are reported to the caller", () => {
   assert.equal(loadConfig({ env: {}, argv: ["--help"] }).cli.help, true);
   assert.equal(loadConfig({ env: {}, argv: ["--version"] }).cli.version, true);
 });
+
+test("demo mode keeps its own store and time apart from the real ones", () => {
+  const dir = tmp();
+  assert.equal(loadConfig({ argv: ["--demo"], env: { SKAUPAT_DATA_DIR: dir }, platform: "win32" }).config.settingsFile, join(dir, "demo-settings.json"));
+  assert.equal(loadConfig({ env: { SKAUPAT_DATA_DIR: dir }, platform: "win32" }).config.settingsFile, join(dir, "settings.json"));
+});

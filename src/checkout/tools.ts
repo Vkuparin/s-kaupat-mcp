@@ -382,7 +382,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
         "checks the products, creates the order on the user's S-kaupat account, and for card payment opens the " +
         "payment provider's page (paymentPage: own_window opens it in this server's browser window; app returns the " +
         "URL for the app's own web view). Pay on delivery needs nothing more. Never retry after order_uncertain: check " +
-        "get_order first. Needs a login.",
+        "get_orders (the account's orders) first. Needs a login.",
       inputSchema: {
         ...draftShape,
         confirmationCode: z.string().min(1).describe("confirmationCode from review_order."),
@@ -465,7 +465,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
         log.info("Order placed", { orderNumber: order.orderNumber, payment: draft.payment.method });
         const { accessToken: _secret, ...shown } = order;
         const payment = await startPayment(order.orderId, draft.payment, paymentPage, token);
-        return { order: { ...shown, summary }, payment, nextStep: nextStepFor(shown.payment === "not_needed" ? "placed" : payment.status) };
+        return { order: { ...shown, summary }, payment, nextStep: nextStepFor(paymentNextStep(shown.payment, payment)) };
       }),
   );
 
@@ -533,7 +533,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
           throw new SKaupatError("invalid_argument", `Order ${orderId} is not waiting for a card payment (${order.payment}).`);
         }
         const payment = await startPayment(orderId, { method: "card", cardId: cardId ?? null, saveCard }, paymentPage, token);
-        return { order, payment, nextStep: nextStepFor(payment.status) };
+        return { order, payment, nextStep: nextStepFor(paymentNextStep(order.payment, payment)) };
       }),
   );
 
@@ -592,7 +592,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
           return {
             order,
             lockerPin,
-            nextStep: nextStepFor(order.state === "cancelled" ? "cancelled" : order.payment === "awaiting_payment" ? "payment_page" : "placed"),
+            nextStep: nextStepFor(orderNextStep(order)),
           };
         }
         return {
@@ -639,7 +639,8 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
         const orders = await ctx.withToken((t) => ctx.checkout.getOrderHistory(t, limit));
         const entries = orders.map((o) => ({ ...o, placedHere: ctx.orders.get(o.orderId) !== null }));
         const past = (o: (typeof entries)[number]) => o.state === "done" || o.state === "cancelled";
-        const unpaid = (o: (typeof entries)[number]) => o.payment === "payment_failed" || o.payment === "payment_link";
+        const unpaid = (o: (typeof entries)[number]) =>
+          o.payment === "awaiting_payment" || o.payment === "payment_failed" || o.payment === "payment_link";
         return {
           needsPayment: entries.filter((o) => !past(o) && unpaid(o)),
           active: entries.filter((o) => !past(o) && !unpaid(o)),
@@ -728,6 +729,25 @@ const NEXT_STEPS = {
   cancelled: { code: "cancelled", fi: "Tilaus on peruttu.", en: "The order has been cancelled." },
   not_needed: { code: "placed", fi: "Tilaus on vastaanotettu.", en: "The order has been received." },
 } as const;
+
+/** What to tell the user about an existing order. */
+function orderNextStep(order: OrderInfo): keyof typeof NEXT_STEPS {
+  if (order.state === "cancelled") return "cancelled";
+  if (order.payment === "paid" || order.payment === "charged") return "paid";
+  if (order.payment === "payment_failed" || order.payment === "payment_link") return "payment_not_started";
+  if (order.payment === "awaiting_payment") return "not_started";
+  return "placed";
+}
+
+/** After starting a payment: "pay on the page that opened" only when a page did open (or the app shows it). */
+function paymentNextStep(
+  orderPayment: OrderInfo["payment"],
+  payment: { status: string; openedInWindow: boolean; url: string | null },
+): keyof typeof NEXT_STEPS {
+  if (orderPayment === "not_needed" || payment.status === "not_needed") return "placed";
+  if (payment.status === "payment_page") return payment.openedInWindow || payment.url ? "payment_page" : "not_started";
+  return payment.status === "payment_not_started" ? "payment_not_started" : "not_started";
+}
 
 function nextStepFor(status: keyof typeof NEXT_STEPS) {
   const { code, fi, en } = NEXT_STEPS[status];

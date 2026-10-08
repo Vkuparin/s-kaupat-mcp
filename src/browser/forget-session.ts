@@ -1,3 +1,4 @@
+import { SKaupatError } from "../errors.js";
 import { log } from "../log.js";
 import { launchProfile } from "./launch.js";
 
@@ -19,13 +20,18 @@ export async function forgetSiteSession(options: { profileDir: string; executabl
     await context.clearCookies();
     const page = context.pages()[0] ?? (await context.newPage());
     // Storage is per site: it can only be cleared from a page of that site.
-    await page.goto(options.siteUrl ?? "https://www.s-kaupat.fi/", { waitUntil: "domcontentloaded" }).catch(() => {});
-    await page
-      .evaluate(() => {
+    // If the site can't be opened (offline), its storage can't be cleared either: say so rather than
+    // let the next login pick the old account up from it.
+    try {
+      await page.goto(options.siteUrl ?? "https://www.s-kaupat.fi/", { waitUntil: "domcontentloaded" });
+      await page.evaluate(() => {
         window.localStorage.clear();
         window.sessionStorage.clear();
-      })
-      .catch((err: unknown) => log.warn("Could not clear the site's storage", { message: err instanceof Error ? err.message.split("\n")[0] : String(err) }));
+      });
+    } catch (err) {
+      log.warn("Could not clear the site's storage", { message: err instanceof Error ? err.message.split("\n")[0] : String(err) });
+      throw new SKaupatError("unavailable", "Could not open S-kaupat to finish logging out.");
+    }
     await context.clearCookies();
   } finally {
     await context.close().catch(() => {});

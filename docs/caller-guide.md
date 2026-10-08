@@ -7,7 +7,7 @@ The rules of thumb:
 - Branch on `error.code` or `error.action`, never on message text.
 - Show `userMessage.fi` or `userMessage.en` as-is; they are written for end users.
 - Store and product names are in Finnish as S-kaupat gives them. Times and prices are raw values (local Finnish time, euros) for the app to format.
-- The server never places an order or touches payment. The user finishes on the S-kaupat site.
+- The app can take the user all the way to a placed order (section 5c). Only a card payment opens the payment provider's own page, either in the server's window or in the app's web view. Ordering can be turned off with `ordering: false`, and then the user finishes on the S-kaupat site.
 
 ## 1. First screen
 
@@ -29,6 +29,7 @@ Call `get_setup_status` when the app starts.
 |---|---|
 | `choose_store` | The store picker (section 2) |
 | `log_in` | A "Log in to S-kaupat" button (section 3). Searching already works, so the app can let the user browse first |
+| `choose_delivery` | The chosen pickup or delivery time has passed: show the time picker (section 5b) again |
 | `null` | Everything is ready |
 
 `mode` is `demo` when the server runs on sample data (the extension's Demo mode). Show a small "demo" badge then, so nobody thinks the prices are real. `login.status` can be `unknown` if S-kaupat did not answer; treat it like logged in and let a list call tell you otherwise.
@@ -73,7 +74,7 @@ The result has one entry per product. Show it as a short checklist:
 | `status` | Show |
 |---|---|
 | `added`, `updated`, `unchanged` | ✓ on the list. If there is a `warning`, add its `label` or `userMessage` (for example "Tilapäisesti loppu", temporarily out of stock) |
-| `missing` | ✗ not added, with `error.userMessage`. `error.reason` says why: `not_sold_in_store`, `unknown_barcode`, `no_internal_id` or `write_failed` |
+| `missing` | ✗ not added, with `error.userMessage`. `error.reason` says why: `not_sold_in_store`, `unknown_barcode`, `no_internal_id`, `whole_pieces_only` or `too_many` (ask for a whole number of pieces, at most 99) or `write_failed` |
 | `uncertain` | ? S-kaupat did not confirm. Suggest checking the list (`get_shopping_list`) |
 
 `summary` has the counts for a one-line answer ("5 products added, 1 not available in this store"). `list.estimatedTotal` is the total at shelf prices; when `complete` is `false`, say "about".
@@ -133,13 +134,13 @@ The whole order can happen in the app's own screens. The only step outside it is
    - `paymentPage: "app"` only returns the URL, for the app's own web view. When the web view reaches `payment.returnUrlPrefix` (`https://www.s-kaupat.fi/payment/auth/<orderId>?responseCode=OK&...`), close it and call `confirm_payment`. `responseCode=Cancel` means the user cancelled.
    - `paymentPage: "later"` creates the order without starting a payment; `pay_order` starts it.
    Then call `get_order` (for example every few seconds while the payment screen is up, and when the app comes back to front): `payment` turns `paid` when done. On `payment_failed` offer `pay_order` again (another card) or `cancel_order`. An unpaid card order is not picked: S-kaupat cancels it if it stays unpaid.
-5. **After.** `get_order` with no `orderId` lists the orders placed through the app; with an `orderId` it gives the state (`received`, `being_picked`, `done`, `cancelled`), payment, S-kaupat's summary and `isCancelable`. `cancel_order` cancels while S-kaupat allows it; ask the user to confirm first. For an "Orders" screen use `get_orders`: all the account's S-kaupat orders, also those made on the site, in three groups like the site's order page: `needsPayment` (show first, with `pay_order` for orders with `placedHere: true`, otherwise `paymentLinkUrl`), `active` and `past`.
+5. **After.** `get_order` with no `orderId` lists the orders placed through the app; with an `orderId` it gives the state (`received`, `being_picked`, `done`, `cancelled`), payment, S-kaupat's summary and `isCancelable`. `cancel_order` cancels while S-kaupat allows it; ask the user to confirm first. For an "Orders" screen use `get_orders`: all the account's S-kaupat orders, also those made on the site, in three groups like the site's order page: `needsPayment` (show first: for `awaiting_payment` and `payment_failed` orders with `placedHere: true` offer `pay_order`; for `payment_link`, or orders made elsewhere, open `paymentLinkUrl` or send the user to the site), `active` and `past`.
 6. **Collecting from a locker.** For a pickup-locker order `get_order` returns `lockerPin`, the code that opens the locker, so the user does not need the S-kaupat app or site to collect it. Show it on the order screen only; it is personal, so don't send it elsewhere or log it.
 7. **Order the same again.** On a past order, an "Order again" button calls `get_order_items` and passes `items` to `review_order` (or to `create_shopping_list` when the user wants to change things first). Prices and availability are checked again in the review; products the store no longer sells show up in its `problems`.
 
 Rules that keep the user safe:
 - Never call `place_order` without the user pressing an order button after seeing the summary.
-- After `order_uncertain` (the answer was lost, so the order may or may not exist), never place again: call `get_order` and look at the user's orders first.
+- After `order_uncertain` (the answer was lost, so the order may or may not exist), never place again: call `get_orders` (all the account's orders) and look for it first.
 - `unpaid_orders` means S-kaupat refuses new orders while an earlier one is unpaid; `unpaidOrders` lists them with a payment link.
 - An app that does not want ordering at all sets `ordering: false` (or `SKAUPAT_ORDERING=false`); `place_order` then answers `orders_disabled`.
 - The order's own access token is kept in the server's data folder (`orders.json`, readable by the user only) and is never returned or logged.

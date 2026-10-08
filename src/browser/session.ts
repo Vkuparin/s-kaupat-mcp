@@ -67,7 +67,10 @@ export class BrowserSession {
    * profile) and lets the next API call start it again.
    */
   async whileClosed<T>(fn: () => Promise<T>): Promise<T> {
+    // One at a time (a login window and a log out both need the profile to themselves).
+    const before = this.suspended;
     const run = (async () => {
+      await before?.catch(() => {});
       await this.starting?.catch(() => {});
       await this.close();
       return fn();
@@ -76,7 +79,7 @@ export class BrowserSession {
     try {
       return await run;
     } finally {
-      this.suspended = null;
+      if (this.suspended === run) this.suspended = null;
     }
   }
 

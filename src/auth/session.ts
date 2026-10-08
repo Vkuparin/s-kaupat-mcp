@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 import { SKaupatError } from "../errors.js";
 import { log } from "../log.js";
 import type { AuthApi } from "./auth-api.js";
@@ -47,6 +49,11 @@ export class LiveAuth implements SKaupatAuth {
   private rejected: string | null = null;
   private renewing: Promise<string> | null = null;
   private loginInProgress: Promise<LoginResult> | null = null;
+  private loggingOut: Promise<void> | null = null;
+  /** Logins this process logged out of; the site's storage must not hand them back to a new login. */
+  private readonly forgotten = new Set<string>();
+  /** The login generation the cached access token and name belong to (see sessionFile). */
+  private generation: string | null = null;
   private timer: NodeJS.Timeout | null = null;
   private readonly now: () => number;
 
@@ -54,7 +61,38 @@ export class LiveAuth implements SKaupatAuth {
     this.now = options.now ?? Date.now;
   }
 
+  /**
+   * A small file next to the lock that changes on every login and log out. Other server processes
+   * sharing the login compare it before using a cached access token, so after one app switches
+   * account the others stop acting on the old one.
+   */
+  private get sessionFile(): string {
+    return `${this.options.lockPath}.session`;
+  }
+
+  private async readGeneration(): Promise<string> {
+    return readFile(this.sessionFile, "utf8").catch(() => "");
+  }
+
+  private async newGeneration(): Promise<void> {
+    const id = randomUUID();
+    await writeFile(this.sessionFile, id).catch((err: unknown) => {
+      log.warn("Could not record the login change", { code: (err as NodeJS.ErrnoException).code ?? "unknown" });
+    });
+    this.generation = id;
+  }
+
+  /** Drops the cached token and name when another process logged in or out since they were read. */
+  private async dropIfStale(): Promise<void> {
+    if (!this.access && !this.displayName) return;
+    if ((await this.readGeneration()) !== (this.generation ?? "")) {
+      this.access = null;
+      this.displayName = null;
+    }
+  }
+
   async status(): Promise<LoginStatus> {
+    await this.loggingOut?.catch(() => {});
     const stored = await this.options.store.read();
     if (!stored) return { status: "logged_out", displayName: null };
     if (stored === this.rejected) return { status: "expired", displayName: null };
@@ -72,6 +110,7 @@ export class LiveAuth implements SKaupatAuth {
   }
 
   async startLogin({ timeoutSeconds }: StartLoginInput): Promise<LoginResult> {
+    await this.loggingOut?.catch(() => {});
     // A second button press while the window is open joins the same login instead of opening another window.
     this.loginInProgress ??= this.runLogin(timeoutSeconds * 1000).finally(() => {
       this.loginInProgress = null;
@@ -80,14 +119,28 @@ export class LiveAuth implements SKaupatAuth {
   }
 
   async getAccessToken(): Promise<string> {
+    await this.dropIfStale();
     if (this.access && this.access.expiresAt - RENEW_MARGIN_MS > this.now()) return this.access.token;
     return this.renew();
   }
 
-  async logout(): Promise<void> {
+  async logout(options: { forgetLocal?: () => void } = {}): Promise<void> {
     if (this.loginInProgress) throw new SKaupatError("login_in_progress", "The S-kaupat login window is open.");
+    this.loggingOut ??= this.runLogout(options).finally(() => {
+      this.loggingOut = null;
+    });
+    return this.loggingOut;
+  }
+
+  private async runLogout({ forgetLocal }: { forgetLocal?: () => void }): Promise<void> {
     await this.renewing?.catch(() => {});
-    await withFileLock(this.options.lockPath, () => this.options.store.clear());
+    await withFileLock(this.options.lockPath, async () => {
+      const stored = await this.options.store.read();
+      if (stored) this.forgotten.add(stored);
+      await this.options.store.clear();
+    });
+    await this.newGeneration();
+    forgetLocal?.();
     this.close();
     this.access = null;
     this.displayName = null;
@@ -113,13 +166,14 @@ export class LiveAuth implements SKaupatAuth {
     // The login window's profile keeps the site's storage between runs, so it may still hold the
     // token S-kaupat just rejected. Tell the window to wait for a different one.
     const stale = current?.status === "expired" ? await this.options.store.read() : null;
-    const result = await this.options.window.open(timeoutMs, stale ? [stale] : []);
+    const result = await this.options.window.open(timeoutMs, [...this.forgotten, ...(stale ? [stale] : [])]);
     if (result.status !== "logged_in") {
       log.info("Login window closed without a login", { outcome: result.status });
       return { status: result.status, displayName: null, alreadyLoggedIn: false };
     }
 
     await withFileLock(this.options.lockPath, () => this.options.store.write(result.login.refreshToken));
+    await this.newGeneration();
     this.rejected = null;
     this.displayName = null;
     this.access = result.login.accessToken ? this.toAccess(result.login.accessToken) : null;
@@ -141,6 +195,7 @@ export class LiveAuth implements SKaupatAuth {
 
   /** Fetches the account's name, renewing the access token once if S-kaupat rejects it. */
   private async loadDisplayName(): Promise<string | null> {
+    await this.dropIfStale();
     if (this.displayName && this.access && this.access.expiresAt > this.now()) return this.displayName;
     const profile = await this.withAccessToken((token) => this.options.api.userProfile(token));
     this.displayName = profile.firstName?.trim() || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
@@ -180,9 +235,11 @@ export class LiveAuth implements SKaupatAuth {
       throw new SKaupatError("session_expired", "The stored S-kaupat login was already rejected.");
     }
     try {
+      const generation = await this.readGeneration();
       const tokens = await this.options.api.refresh(stored);
       if (tokens.refreshToken && tokens.refreshToken !== stored) await this.options.store.write(tokens.refreshToken);
       this.access = this.toAccess(tokens.accessToken);
+      this.generation = generation;
       this.scheduleRenewal();
       log.debug("Access token renewed");
       return this.access.token;

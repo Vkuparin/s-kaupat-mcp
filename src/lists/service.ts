@@ -13,7 +13,7 @@ export interface RequestedItem {
 }
 
 /** Why a product was not put on the list. */
-export type MissingReason = "unknown_barcode" | "not_sold_in_store" | "no_internal_id" | "write_failed";
+export type MissingReason = "unknown_barcode" | "not_sold_in_store" | "no_internal_id" | "write_failed" | "whole_pieces_only" | "too_many";
 
 export interface ItemError {
   code: ErrorCode;
@@ -86,17 +86,21 @@ export async function addItemsToList(options: {
       results.push({ ...base, status: "missing", name: found?.product.name ?? null, error: itemError(stop.code, "write_failed") });
       continue;
     }
-    const problem = productProblem(found, check);
+    const problem = productProblem(found, check) ?? quantityProblem(found, req.quantity);
     if (problem || !found) {
       results.push({ ...base, status: "missing", name: found?.product.name ?? null, error: problem! });
       continue;
     }
 
-    const existing = list.items.find((i) => i.productId === req.productId);
-    if (existing && existing.quantity === req.quantity && existing.allowSubstitutes === req.allowSubstitutes) {
-      results.push({ ...base, status: "unchanged", item: existing, ...warningFor(check) });
+    // The product may already be on the list more than once (added on the site, or an earlier
+    // half-finished change): every old row goes, so exactly one row with the request is left.
+    const oldRows = list.items.filter((i) => i.productId === req.productId);
+    const existing = oldRows[0];
+    if (oldRows.length === 1 && matches(existing!, req)) {
+      results.push({ ...base, status: "unchanged", item: existing!, ...warningFor(check) });
       continue;
     }
+    const oldIds = new Set(oldRows.map((r) => r.itemId));
 
     try {
       // S-kaupat's item update input is not mapped yet, so a change is an add followed by removing
@@ -115,10 +119,11 @@ export async function addItemsToList(options: {
           storeId,
         ),
       );
-      if (existing && list.items.some((i) => i.productId === req.productId && i.itemId !== existing.itemId)) {
-        list = await withToken((t) => lists.removeItem(t, list.id, existing.itemId, storeId));
+      if (list.items.some((i) => i.productId === req.productId && !oldIds.has(i.itemId))) {
+        for (const old of oldRows) list = await withToken((t) => lists.removeItem(t, list.id, old.itemId, storeId));
       }
-      const written = list.items.find((i) => i.productId === req.productId);
+      const rows = list.items.filter((i) => i.productId === req.productId);
+      const written = rows.length === 1 ? rows[0] : undefined;
       if (written && matches(written, req)) {
         results.push({ ...base, status: existing ? "updated" : "added", item: written, ...warningFor(check) });
       } else {
@@ -162,11 +167,20 @@ function matches(item: ShoppingListItem, req: RequestedItem): boolean {
   return item.quantity === req.quantity && item.allowSubstitutes === req.allowSubstitutes;
 }
 
+/** Pieces must be whole; weighed products may be any positive amount. The tools allow at most 99. */
+function quantityProblem(found: ListableProduct | undefined, quantity: number): ItemError | null {
+  if (!found) return null;
+  if (quantity > 99) return itemError("invalid_quantity", "too_many");
+  if (found.product.priceBasis === "per_item" && !Number.isInteger(quantity)) return itemError("invalid_quantity", "whole_pieces_only");
+  return null;
+}
+
 function mergeDuplicates(items: RequestedItem[]): RequestedItem[] {
   const merged = new Map<string, RequestedItem>();
   for (const item of items) {
     const prev = merged.get(item.productId);
-    merged.set(item.productId, prev ? { ...item, quantity: prev.quantity + item.quantity } : { ...item });
+    // Rounded to grams, so 0.1 + 0.2 kg is 0.3 and not 0.30000000000000004.
+    merged.set(item.productId, prev ? { ...item, quantity: Math.round((prev.quantity + item.quantity) * 1000) / 1000 } : { ...item });
   }
   return [...merged.values()];
 }

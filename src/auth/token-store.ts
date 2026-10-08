@@ -1,3 +1,4 @@
+import { defaultDataDir } from "../config.js";
 import { execFile } from "node:child_process";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -157,7 +158,8 @@ export function createTokenStore(config: Pick<SKaupatConfig, "tokenStore" | "tok
   lockPath: string;
 } {
   if (config.tokenStore === "credential-manager") {
-    return { store: new WindowsCredentialStore(), lockPath: join(config.dataDir, "refresh.lock") };
+    // The credential is one per Windows user, whatever data folder an app uses, so the lock must be too.
+    return { store: new WindowsCredentialStore(), lockPath: join(defaultDataDir(), "refresh.lock") };
   }
   return { store: new FileTokenStore(config.tokenFile), lockPath: `${config.tokenFile}.lock` };
 }

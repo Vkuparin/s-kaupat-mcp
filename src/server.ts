@@ -17,7 +17,7 @@ import type { CheckoutApi } from "./checkout/types.js";
 import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.12.0";
+export const SERVER_VERSION = "0.12.1";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -61,6 +61,8 @@ export interface SiteWindow {
 }
 
 const SITE_URL = "https://www.s-kaupat.fi/";
+/** How far ahead times are shown and can be chosen (S-kaupat's own calendar shows about two weeks). */
+const BOOKING_WINDOW_DAYS = 28;
 
 /** Read by MCP clients that pass server instructions to the model. */
 export const SERVER_INSTRUCTIONS = [
@@ -325,9 +327,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     },
     async () =>
       run("log_out", async () => {
-        // The orders first: if the browser part fails, the user can press again and nothing is left behind.
-        options.orders?.clear();
-        await auth.logout();
+        // The orders go with the login, before the browser part, which may fail and can be pressed again.
+        await auth.logout({ forgetLocal: () => options.orders?.clear() });
         return { status: "logged_out" as const, userMessage: { fi: "Olet kirjautunut ulos.", en: "You are logged out." } };
       }),
   );
@@ -585,7 +586,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       title: "Remove products from an S-kaupat shopping list",
       description:
         "Take products off a shopping list by product ID. Returns the list afterwards and which products were " +
-        "removed or were not on the list. Needs a login.",
+        "removed or were not on the list; failed lists any that could not be removed (with the error), checked " +
+        "against the list as it is now. Needs a login.",
       inputSchema: {
         listId: z.string().min(1).describe("List ID from get_shopping_lists."),
         productIds: z.array(z.string().min(1)).min(1).max(50).describe("Product IDs (EANs) to remove."),
@@ -600,13 +602,31 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         let list = await getListOrThrow(listId, store);
         const removed: string[] = [];
         const notOnList: string[] = [];
+        const failed: { productId: string; error: { code: string; userMessage: { fi: string; en: string } } }[] = [];
+        let stop: SKaupatError | null = null;
         for (const productId of new Set(productIds)) {
           const rows = list.items.filter((i) => i.productId === productId);
-          if (rows.length === 0) notOnList.push(productId);
-          for (const row of rows) list = await withToken((t) => lists.removeItem(t, list.id, row.itemId, store));
-          if (rows.length > 0) removed.push(productId);
+          if (rows.length === 0) {
+            notOnList.push(productId);
+            continue;
+          }
+          if (stop) {
+            failed.push({ productId, error: { code: stop.code, userMessage: stop.userMessage } });
+            continue;
+          }
+          try {
+            for (const row of rows) list = await withToken((t) => lists.removeItem(t, list.id, row.itemId, store));
+            removed.push(productId);
+          } catch (err) {
+            // Report what was done so far instead of losing it; a lost login stops the rest.
+            const e = toSKaupatError(err);
+            if (removed.length === 0 && failed.length === 0 && ["login_required", "session_expired", "list_not_found"].includes(e.code)) throw e;
+            if (["login_required", "session_expired", "list_not_found"].includes(e.code)) stop = e;
+            failed.push({ productId, error: { code: e.code, userMessage: e.userMessage } });
+          }
         }
-        return { list: listView(list), removed, notOnList };
+        if (failed.length > 0) list = (await withToken((t) => lists.getList(t, list.id, store)).catch(() => null)) ?? list;
+        return { list: listView(list), removed, notOnList, ...(failed.length > 0 ? { failed } : {}) };
       }),
   );
 
@@ -783,6 +803,10 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       run("get_delivery_slots", async () => {
         const start = fromDate ?? finnishDate(now());
         const dates = dateRange(start, days);
+        // select_delivery looks a slot up within the same window, so every time shown here can be chosen.
+        if (dates[dates.length - 1]! > dateRange(finnishDate(now()), BOOKING_WINDOW_DAYS).at(-1)!) {
+          throw new SKaupatError("invalid_argument", `Times can be shown up to ${BOOKING_WINDOW_DAYS} days ahead.`);
+        }
         const calendar = await requireDelivery().getDeliveryCalendar(areaId, start, dates[dates.length - 1]!);
         if (!calendar) throw deliveryAreaNotFound(areaId);
         const selectedSlotId = selection.getDelivery()?.slot.slotId ?? null;
@@ -817,7 +841,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     async ({ areaId, slotId }) =>
       run("select_delivery", async () => {
         const today = finnishDate(now());
-        const dates = dateRange(today, 14);
+        const dates = dateRange(today, BOOKING_WINDOW_DAYS);
         const calendar = await requireDelivery().getDeliveryCalendar(areaId, today, dates[dates.length - 1]!);
         if (!calendar) throw deliveryAreaNotFound(areaId);
         const slot = calendar.slots.find((s) => s.slotId === slotId);
@@ -831,7 +855,11 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         if (area.storeId && area.storeId !== selection.get()?.id) {
           // The chosen store follows the chosen pickup place, so prices and lists match it.
           const details = (await client.getStores([area.storeId])).get(area.storeId);
-          if (details) selection.set({ ...(seenStores.get(area.storeId) ?? storeFromDetails(details)), selectedAt: now().toISOString() });
+          if (!details) {
+            // Saving the time without its store would leave a choice every other tool ignores.
+            throw new SKaupatError("unavailable", `The store ${area.storeId} of this option could not be read; try again.`);
+          }
+          selection.set({ ...(seenStores.get(area.storeId) ?? storeFromDetails(details)), selectedAt: now().toISOString() });
         }
         const saved: SavedDelivery = { area, slot, selectedAt: now().toISOString() };
         selection.setDelivery(saved);

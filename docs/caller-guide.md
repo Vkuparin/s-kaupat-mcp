@@ -18,7 +18,7 @@ Call `get_setup_status` when the app starts.
   "schemaVersion": "1.0",
   "mode": "live",
   "store": null,
-  "login": { "status": "logged_out", "displayName": null },
+  "login": { "status": "logged_out", "displayName": null, "accountId": null },
   "canSearch": false,
   "canUseLists": false,
   "nextStep": "choose_store"
@@ -51,6 +51,8 @@ Shopping lists need the user's S-kaupat account; searching does not.
 3. The call returns when they finish (`logged_in`), close the window (`cancelled`) or wait too long (`timed_out`), each with a `userMessage` to show.
 
 Call `start_login` only after the user asks for it. If the app is an AI assistant, the model should ask "Shall I open the S-kaupat login?" first. While the window is open, other calls answer `login_in_progress`; show "Finish logging in in the S-kaupat window".
+
+When logged in, `login_status`, `start_login` and `get_setup_status` also give `accountId`: a stable ID for the S-kaupat account, such as `sk_3f9a…`. The same account gets the same ID on any device and after logging out and in again; another account gets a different one. Use it to keep the app's own data per account, such as favourites or the user's settings, and to notice when someone switches account. It is derived one-way from S-kaupat's own user ID, which apps never see, so it can't be used to look the person up at S-kaupat. Demo mode always gives the same ID. Treat it as an opaque string.
 
 When S-kaupat ends the login, calls answer `session_expired` and the app shows the "Log in" button again.
 

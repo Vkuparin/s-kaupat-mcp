@@ -33,7 +33,7 @@ All of these are built by the Release workflow in GitHub Actions.
 | `remove_from_shopping_list` | `listId`, `productIds[]` | The list afterwards, with `removed` and `notOnList`. Needs login |
 | `delete_shopping_list` | `listId` | Deletes the whole list. Needs login |
 | `find_address` | `query` | Address matches like the site's delivery search box, each with a `location` for `get_delivery_options` |
-| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary) and the nearest pickup places with distance. Each place has `areaId`, fee, address and the next free time. Home delivery and express times are picked on the site for now |
+| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary) and the nearest pickup places with `distanceMeters`. Each place has `areaId`, fee, address and the next free time. Home delivery and express times are picked on the site for now |
 | `get_delivery_slots` | `areaId`, `fromDate` (optional), `days` (1 to 14) | A calendar: per day, times with start, end, fee and `status` (`available`, `full`, `closed`, `unknown`) |
 | `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
 | `clear_delivery` | none | Forgets the chosen time |

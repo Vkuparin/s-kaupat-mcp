@@ -87,8 +87,8 @@ function helsinkiIso(date: string, hour: number): string {
 
 /** Made-up addresses for demo mode: a home in Helsinki and one in Tampere. */
 const DEMO_ADDRESSES: AddressSuggestion[] = [
-  { addressId: "demo-address-1", title: "Esimerkkitie 5, Helsinki", street: "Esimerkkitie 5", postalCode: "00100", city: "Helsinki", latitude: 60.171, longitude: 24.941, kind: "address" },
-  { addressId: "demo-address-2", title: "Mallikatu 10, Tampere", street: "Mallikatu 10", postalCode: "33100", city: "Tampere", latitude: 61.49, longitude: 23.77, kind: "address" },
+  { addressId: "demo-address-1", title: "Esimerkkitie 5, Helsinki", street: "Esimerkkitie 5", postalCode: "00100", city: "Helsinki", latitude: 60.171, longitude: 24.941, kind: "address", areaId: null },
+  { addressId: "demo-address-2", title: "Mallikatu 10, Tampere", street: "Mallikatu 10", postalCode: "33100", city: "Tampere", latitude: 61.49, longitude: 23.77, kind: "address", areaId: null },
 ];
 
 export function demoAddresses(text: string): AddressSuggestion[] {
@@ -126,11 +126,11 @@ export function demoPickupNear(stores: Store[], location: DeliveryLocation, date
       const distance = Math.round(metres(location.latitude, location.longitude, store.coordinates.lat, store.coordinates.lon));
       return demoPickupAreas(store, index, now).map((area) => ({
         area,
-        distance,
+        distanceMeters: distance,
         slots: demoCalendar(store, index, area.areaId, date, date, now)?.slots ?? [],
       }));
     })
-    .sort((a, b) => a.distance - b.distance)
+    .sort((a, b) => a.distanceMeters - b.distanceMeters)
     .slice(0, limit);
 }
 

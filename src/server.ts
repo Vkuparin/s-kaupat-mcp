@@ -608,7 +608,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       description:
         "Searches addresses the way the site's 'Valitse toimitustapa' search box does: a street address with the " +
         "city works best, e.g. 'Mannerheimintie 1, Helsinki' (a city name alone finds nothing). Each match has a " +
-        "title to show and a location (postalCode, latitude, longitude) to pass to get_delivery_options. The " +
+        "title to show and a location (postalCode, latitude, longitude) to pass to get_delivery_options. Matches can " +
+        "also be pickup places (kind 'place', with an areaId for get_delivery_slots). The " +
         "address is not saved by this server; the app may keep it for the user.",
       inputSchema: {
         query: z.string().trim().min(3).max(120).describe("What the user typed, e.g. 'Kauppakartanonkatu 7, Helsinki'."),
@@ -625,6 +626,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
           postalCode: a.postalCode,
           city: a.city,
           kind: a.kind,
+          areaId: a.areaId,
           location:
             a.postalCode && a.latitude != null && a.longitude != null
               ? { postalCode: a.postalCode, latitude: a.latitude, longitude: a.longitude }
@@ -647,7 +649,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         "Ways to get an order, for the first step of choosing a time (the site's 'Valitse toimitustapa'). " +
         "Without location: the pickup places of the user's store. With location (from find_address): which " +
         "methods are offered there (pickup, home_delivery, express, each with S-kaupat's own Finnish summary such " +
-        "as '8,90–14,90 €, huomenna') and the pickup places nearest to it with their distance and next free time. " +
+        "as '8,90–14,90 €, huomenna') and the pickup places nearest to it with distanceMeters and the next free time. " +
         "Each option has an areaId for get_delivery_slots and nextSlot, so the app can show 'next free: tomorrow " +
         "10–12' at once. Home delivery and express times are chosen on the site for now (siteOnlyMethods).",
       inputSchema: {
@@ -684,7 +686,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
           }
           const methods = methodsResult.status === "fulfilled" ? methodsResult.value : [];
           const places = placesResult.status === "fulfilled" ? placesResult.value : [];
-          const options = places.map((p) => ({ ...p.area, distance: p.distance, freeTimesOnDate: p.slots.filter((x) => x.status === "available").length }));
+          const options = places.map((p) => ({ ...p.area, distanceMeters: p.distanceMeters, freeTimesOnDate: p.slots.filter((x) => x.status === "available").length }));
           return {
             location: { postalCode: location.postalCode },
             date: day,

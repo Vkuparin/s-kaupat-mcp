@@ -76,8 +76,10 @@ export interface AddressSuggestion {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
-  /** S-kaupat's kind of match (a street address or a pickup place), as it reports it. */
+  /** S-kaupat's kind of match as it reports it, e.g. "place" for a pickup place. */
   kind: string | null;
+  /** For a pickup place match: its areaId, usable with get_delivery_slots directly. */
+  areaId: string | null;
 }
 
 /** Where to look for delivery: a postal code and coordinates, as an address search returns them. */
@@ -103,8 +105,8 @@ export interface DeliveryMethodAvailability {
 /** A pickup place near a location, with its times on one day. */
 export interface NearbyPickup {
   area: DeliveryArea;
-  /** Distance from the location as S-kaupat reports it (unit not confirmed yet). */
-  distance: number | null;
+  /** Distance from the location in metres, rounded (S-kaupat reports metres; confirmed live 2026-10-08). */
+  distanceMeters: number | null;
   slots: DeliverySlot[];
 }
 

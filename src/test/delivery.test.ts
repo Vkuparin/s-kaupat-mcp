@@ -366,7 +366,7 @@ test("from an address: methods offered there and the nearest pickup places", asy
     res.data.options.slice(0, 3).map((o: any) => o.areaId),
     ["demo-pickup-fixture-store-1", "demo-locker-fixture-store-1", "demo-pickup-fixture-store-3"],
   );
-  assert.ok(res.data.options[0].distance < 200);
+  assert.ok(res.data.options[0].distanceMeters < 200);
   assert.equal(res.data.options[0].freeTimesOnDate, 2);
   assert.equal(JSON.stringify(res.data).includes("Esimerkkitie"), false);
 
@@ -388,6 +388,7 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
         {
           data: {
             addressAutosuggest: [
+              { id: "area-22595800", title: "Prisma Herttoniemi noutolokero", streetAddress: "Insinöörinkatu 2", postalCode: "00880", city: "Helsinki", latitude: 60.19, longitude: 25.03, resultType: "place" },
               { id: "x1", title: "Testikatu 1, Helsinki", streetAddress: "Testikatu 1", postalCode: "00930", city: "Helsinki", latitude: 60.2, longitude: 25.08, resultType: "Address" },
             ],
           },
@@ -419,7 +420,7 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
             pickupSlotsForCoordinates: {
               slotsInPickupPoints: [
                 {
-                  distance: 3100,
+                  distance: 3100.4,
                   store: { id: "726109200", brand: "prisma" },
                   pickupPoint: { id: "22595800-area", name: "Prisma Herttoniemi noutolokero", description: " ", address: { street: " Insinöörinkatu 2", city: "Helsinki", postalCode: "00880" } },
                   slots: [
@@ -436,7 +437,9 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
       sent,
     ),
   });
-  const [address] = await client.findAddresses('Testikatu "1"');
+  const [locker, address] = await client.findAddresses('Testikatu "1"');
+  assert.equal(locker!.areaId, "22595800");
+  assert.equal(address!.areaId, null);
   assert.match(sent[0].query, /addressAutosuggest\(countryCode: "FI", query: "Testikatu \\"1\\"", searchContext: DELIVERY_METHOD_SELECTION\)/);
   assert.equal(address!.postalCode, "00930");
   const location = { postalCode: address!.postalCode!, latitude: address!.latitude!, longitude: address!.longitude! };
@@ -459,7 +462,7 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
   assert.match(sent[3].query, /pickupSlotsForCoordinates\(startDate: "2099-10-09", endDate: "2099-10-09", closeToCoordinates: \{ latitude: 60.2, longitude: 25.08 \}, limit: 8\)/);
   assert.equal(places.length, 1);
   const place = places[0]!;
-  assert.equal(place.distance, 3100);
+  assert.equal(place.distanceMeters, 3100);
   assert.equal(place.area.areaId, "22595800-area");
   assert.equal(place.area.storeId, "726109200");
   assert.equal(place.area.description, null);

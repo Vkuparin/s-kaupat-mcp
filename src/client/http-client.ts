@@ -568,6 +568,8 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
       latitude: a.latitude ?? null,
       longitude: a.longitude ?? null,
       kind: a.resultType ?? null,
+      // Pickup places come back with ids like "area-<areaId>" (seen live 2026-10-08).
+      areaId: /^area-(.+)$/.exec(String(a.id))?.[1] ?? null,
     }));
   }
 
@@ -662,7 +664,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
         alcoholAllowed: p.slots?.[0]?.isAlcoholSellingAllowed ?? null,
         nextSlot: slots.find((x) => x.status === "available") ?? null,
       };
-      return [{ area, distance: p.distance ?? null, slots }];
+      return [{ area, distanceMeters: p.distance == null ? null : Math.round(p.distance), slots }];
     });
   }
 

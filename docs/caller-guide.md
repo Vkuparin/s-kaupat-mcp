@@ -15,7 +15,7 @@ Call `get_setup_status` when the app starts.
 
 ```json
 {
-  "schemaVersion": "0.2",
+  "schemaVersion": "0.3",
   "mode": "live",
   "store": null,
   "login": { "status": "logged_out", "displayName": null },
@@ -84,7 +84,7 @@ Every failure looks like this:
 
 ```json
 {
-  "schemaVersion": "0.2",
+  "schemaVersion": "0.3",
   "error": {
     "code": "session_expired",
     "action": "log_in",

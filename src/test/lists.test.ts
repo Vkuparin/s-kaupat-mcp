@@ -79,7 +79,9 @@ test("create_shopping_list reports what was added, flagged and missing", async (
   assert.equal(milk.status, "added");
   assert.equal(milk.item.quantity, 2);
   assert.equal(milk.item.allowSubstitutes, true);
-  assert.equal(milk.item.product.price, 1.09);
+  // The result names the row; the product with its price is in list.items.
+  assert.equal(milk.item.product, undefined);
+  assert.equal(data.list.items.find((i: any) => i.itemId === milk.item.itemId).product.price, 1.09);
   assert.equal(yogurt.status, "added");
   assert.equal(yogurt.item.allowSubstitutes, false);
   assert.equal(yogurt.warning.code, "product_unavailable");

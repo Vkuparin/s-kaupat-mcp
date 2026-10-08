@@ -58,6 +58,10 @@ export class BrowserLoginWindow implements LoginWindow {
       await page.goto(startUrl).catch((err: unknown) => log.warn("Login window could not load the start page", {
         message: err instanceof Error ? err.message.split("\n")[0] : String(err),
       }));
+      // Edge may add its own blank start tab next to ours; leave the user only the S-kaupat one.
+      for (const other of context.pages()) {
+        if (other !== page && /^(about:blank|edge:\/\/|chrome:\/\/)/.test(other.url())) await other.close().catch(() => {});
+      }
 
       const deadline = Date.now() + timeoutMs;
       const pollMs = this.options.pollMs ?? 1000;

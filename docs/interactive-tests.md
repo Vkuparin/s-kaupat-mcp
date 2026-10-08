@@ -5,38 +5,38 @@ Everything below needs a Windows PC with Edge, a real S-kaupat account and the n
 Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 
 ## 1. Extension install
-- [x] Install `s-kaupat-0.4.1.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
+- [x] Install `s-kaupat-0.4.2.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
 - [ ] With Demo mode on, "find milk" works with no browser window and no login.
 - [ ] Turn Demo mode off and restart Claude Desktop.
 
 ## 2. Browser window (API transport)
-- [ ] The first S-kaupat call opens one Edge window **minimised in the taskbar**, not in front.
+- [ ] The first S-kaupat call opens one Edge window **minimised in the taskbar**, not in front. (0.4.0 on 2026-10-08: it popped up in front with an extra blank tab; fixed in 0.4.1, recheck.)
 - [ ] The window shows the "controlled by automated software" bar. This is intended: it does not hide that software drives it.
-- [ ] S-kaupat answers calls from it (no `blocked`). If it answers `blocked`, note whether the site shows a check in the window.
+- [x] S-kaupat answers calls from it (no `blocked`). (2026-10-08: store search, product search and list writes all worked.) If it answers `blocked`, note whether the site shows a check in the window.
 - [ ] The window closes after about 3 minutes without calls, and the next call opens it again.
 - [ ] Closing the window by hand: the next call still works.
 
 ## 3. First run
-- [ ] Before choosing a store, `get_setup_status` says `nextStep: choose_store`; after choosing, `log_in`; after logging in, `null`.
+- [x] Before choosing a store, `get_setup_status` says `nextStep: choose_store`. (2026-10-08; the later steps not yet rechecked.)
 
 ## 4. Store
-- [ ] "Find S-markets in Tampere" lists stores; picking one saves it; `get_selected_store` shows it after a restart.
+- [x] "Find S-markets in Tampere" lists stores; picking one saves it (2026-10-08: Prisma Herttoniemi). Still to check: `get_selected_store` after a restart.
 
 ## 5. Login
-- [ ] `start_login` opens a normal-sized login window (with the automation bar); logging in closes it and returns your first name.
+- [x] `start_login` returns your first name. (2026-10-08: a stale saved login read as `expired`; Ville had signed in on the site in the server's window, and `start_login` picked that up without a password.)
 - [ ] While it is open, a product search answers `login_in_progress`.
 - [ ] `login_status` says logged_in after a Claude Desktop restart.
 - [ ] Token renewal outside the browser: after an hour or more idle, a list call still works without a login window.
 - [ ] Log out on the site in the server's window (or wait for expiry): the next list call answers `session_expired`, and `start_login` opens the window and does not reuse the old login.
 
 ## 6. Products
-- [ ] Search "maito", sorted by price; page two with offset.
+- [x] Search "maito", sorted by price. (2026-10-08: S-kaupat's own price sort ranked yeast and margarine first; 0.4.2 sorts only the 50 most relevant matches. Recheck.)
 - [ ] Product details for a product with allergens and nutrients.
 - [ ] Categories: top level, then browse one category.
 
 ## 7. Shopping list round trip
-- [ ] Create a list with 3 products, one of them a quantity of 2. Every result says `added`.
-- [ ] Add the same product again with a new quantity: `updated`, and the list on the site shows one row with the new quantity (not two rows). Note what the site does if it shows two.
+- [x] Create a list with products: every result says `added` (2026-10-08, 2 products).
+- [x] Add the same product again with a new quantity: `updated`, one row with the new quantity (2026-10-08, list Testi). Still to check: the site shows the same.
 - [ ] Remove one product; delete the list.
 - [ ] On s-kaupat.fi, "Lisää kaikki ostoskoriin" puts a list's products in the cart.
 

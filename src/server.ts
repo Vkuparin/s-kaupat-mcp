@@ -11,9 +11,9 @@ import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./se
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.4.1";
+export const SERVER_VERSION = "0.4.2";
 /** Bumped when tool inputs or result shapes change incompatibly. */
-export const SCHEMA_VERSION = "0.2";
+export const SCHEMA_VERSION = "0.3";
 
 const storeId = z
   .string()
@@ -206,7 +206,10 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         sort: z
           .enum(PRODUCT_SORTS)
           .default("relevance")
-          .describe("relevance (S-kaupat's own ranking), price_asc or price_desc."),
+          .describe(
+            "relevance (S-kaupat's own ranking), price_asc or price_desc. A price sort orders the 50 most " +
+              "relevant matches, so 'cheapest milk' stays milk; for a whole category by price use browse_category.",
+          ),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -619,7 +622,10 @@ function listWriteView({ list, results }: ListWriteResult) {
   const count = (status: string) => results.filter((r) => r.status === status).length;
   return {
     list: listView(list),
-    results,
+    // The full product is already in list.items; a result names the row so the answer stays small.
+    results: results.map((r) =>
+      "item" in r ? { ...r, item: { itemId: r.item.itemId, name: r.item.name, quantity: r.item.quantity, allowSubstitutes: r.item.allowSubstitutes } } : r,
+    ),
     summary: {
       added: count("added"),
       updated: count("updated"),

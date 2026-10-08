@@ -117,8 +117,12 @@ export class BrowserSession {
       // window), so the window is also minimised through the browser's own window controls.
       await minimize(context, page);
       await page.goto(this.startUrl, { waitUntil: "domcontentloaded" });
-      // Edge may open its own start tab or restore old ones; one S-kaupat tab is all the window needs.
+      // Edge may open its own start tab or restore old ones, sometimes only after the window is up
+      // (seen live 2026-10-08: a leftover about:blank tab); one S-kaupat tab is all the window needs.
       for (const other of context.pages()) if (other !== page) await other.close().catch(() => {});
+      context.on("page", (other) => {
+        if (other !== page) void other.close().catch(() => {});
+      });
       this.page = page;
       log.info("S-kaupat browser session started");
       return page;

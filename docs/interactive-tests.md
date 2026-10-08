@@ -5,12 +5,12 @@ Everything below needs a Windows PC with Edge, a real S-kaupat account and the n
 Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 
 ## 1. Extension install
-- [x] Install `s-kaupat-0.4.2.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
+- [x] Install `s-kaupat-0.4.3.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
 - [ ] With Demo mode on, "find milk" works with no browser window and no login.
 - [ ] Turn Demo mode off and restart Claude Desktop.
 
 ## 2. Browser window (API transport)
-- [ ] The first S-kaupat call opens one Edge window **minimised in the taskbar**, not in front. (0.4.0 on 2026-10-08: it popped up in front with an extra blank tab; fixed in 0.4.1, recheck.)
+- [x] The first S-kaupat call opens one Edge window **minimised in the taskbar**, not in front. (0.4.2 on 2026-10-08: minimised, but a leftover about:blank tab; 0.4.3 closes tabs that open late. Recheck one tab.)
 - [ ] The window shows the "controlled by automated software" bar. This is intended: it does not hide that software drives it.
 - [x] S-kaupat answers calls from it (no `blocked`). (2026-10-08: store search, product search and list writes all worked.) If it answers `blocked`, note whether the site shows a check in the window.
 - [ ] The window closes after about 3 minutes without calls, and the next call opens it again.

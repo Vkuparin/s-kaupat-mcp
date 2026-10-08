@@ -15,7 +15,7 @@ Call `get_setup_status` when the app starts.
 
 ```json
 {
-  "schemaVersion": "0.3",
+  "schemaVersion": "1.0",
   "mode": "live",
   "store": null,
   "login": { "status": "logged_out", "displayName": null },
@@ -151,7 +151,7 @@ Every failure looks like this:
 
 ```json
 {
-  "schemaVersion": "0.3",
+  "schemaVersion": "1.0",
   "error": {
     "code": "session_expired",
     "action": "log_in",
@@ -185,7 +185,7 @@ Show `userMessage`, then offer what `action` says:
 
 ## 7. What the user sees on their computer
 
-In live mode the server sends S-kaupat calls from its own Edge or Chrome window, started minimised in the taskbar, because S-kaupat only answers its own website. The window closes itself after 3 minutes without calls. If the user asks about it, the app can say it is the S-kaupat connection and can be ignored or closed. Both this window and the login window show that software controls them; that is intended.
+In live mode the server sends S-kaupat calls from its own Edge or Chrome window, started minimised and kept off the taskbar, because S-kaupat only answers its own website. The window closes itself after 3 minutes without calls. If the user asks about it, the app can say it is the S-kaupat connection and can be ignored or closed. Both this window and the login window show that software controls them; that is intended.
 
 ## 8. Try it without an account
 

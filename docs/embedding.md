@@ -109,13 +109,24 @@ With `tokenStore: "credential-manager"` the login is saved in Windows Credential
 
 ## What the user's PC needs
 
-- **Windows 10 or 11 with Microsoft Edge** (always installed) or Google Chrome. S-kaupat only answers requests from its own website, so the server sends them from its own browser window. That window opens minimised in the taskbar on the first call and closes after 3 idle minutes. It uses its own browser profile in `dataDir`, never the user's everyday browser.
+- **Windows 10 or 11 with Microsoft Edge** (always installed) or Google Chrome. S-kaupat only answers requests from its own website, so the server sends them from its own browser window. That window opens minimised on the first call, without a taskbar button and closes after 3 idle minutes. It uses its own browser profile in `dataDir`, never the user's everyday browser.
 - **A desktop session.** Logging in opens a small S-kaupat window on the user's screen, and the API window is a real window too. Run the server as the signed-in user, started by your app (for example when your app starts, or from its tray icon). It cannot run as a Windows service or under another account, because those have no desktop the user can see.
 - **One server per data folder.** Only one process can use a browser profile at a time. A second copy with the same `dataDir` answers `browser_busy` while the first one's window is open. Run one server per app and give it its own `dataDir`.
 - Network access to `www.s-kaupat.fi` and `api.s-kaupat.fi`.
 
-Nothing is installed and no admin rights are needed. The exe is not code-signed yet, so Windows SmartScreen may warn the first time an unsigned app starts it from a downloaded file; ship it inside your own signed installer.
+Nothing is installed and no admin rights are needed. The exe is not code-signed, so Windows SmartScreen may warn the first time it is started from a downloaded file ("Windows protected your PC"; choose More info, then Run anyway). Ship it inside your own signed installer and your users won't see that warning.
+
+The server is licensed under Apache-2.0 (see `LICENSE`), so an app may bundle and ship it.
 
 ## Versions
 
-`--version` prints the server version. Every tool result carries `schemaVersion`, which changes when a result shape changes incompatibly, so your app can check it once at start.
+`--version` prints the server version. Every tool result carries `schemaVersion`, so your app can check it once at start.
+
+From 1.0.0 the server follows semantic versioning, and these are stable within a major version:
+
+- tool names and their inputs (new optional inputs may be added),
+- result fields (new fields may be added; existing ones keep their meaning and type),
+- error `code` and `action` values, `nextStep` values and other enum values the docs list (new values may be added, so treat unknown ones like the closest documented case),
+- configuration keys, environment variables and command-line flags.
+
+`schemaVersion` is `1.0` for all of 1.x and moves to `2.0` only with a major version. Anything that would break an app built on 1.x waits for 2.0, and `CHANGELOG.md` lists every change. Texts are not part of the contract: tool descriptions, `message` and `userMessage` wording may improve in any release.

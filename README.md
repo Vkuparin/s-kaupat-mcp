@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **early (v0.12.2)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **release candidate (v1.0.0-rc.1)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -86,7 +86,7 @@ Every result carries `schemaVersion`. Failures come back as MCP tool errors (`is
 
 ```json
 {
-  "schemaVersion": "0.3",
+  "schemaVersion": "1.0",
   "error": {
     "code": "login_required",
     "action": "log_in",
@@ -235,7 +235,7 @@ Settings come from command-line flags, environment variables or a JSON config fi
 
 Every tool sends its own GraphQL query text to `api.s-kaupat.fi`; no persisted-query hashes are needed (see [docs/s-kaupat-api.md](docs/s-kaupat-api.md), section 1). Parsing is tested against responses captured live in `docs/samples/` and `fixtures/api/`.
 
-**The calls come from a browser window.** Since 7 October 2026 S-kaupat's API answers plain scripts with `403`, while it answers its own website. So by default (`SKAUPAT_TRANSPORT=browser`) the server keeps one Microsoft Edge (or Chrome) window with its own profile, started **minimised in the taskbar**, with the S-kaupat site open, and sends each API call from inside that page, the way the website does. It is a normal browser window that does not disguise itself.
+**The calls come from a browser window.** Since 7 October 2026 S-kaupat's API answers plain scripts with `403`, while it answers its own website. So by default (`SKAUPAT_TRANSPORT=browser`) the server keeps one Microsoft Edge (or Chrome) window with its own profile, started **minimised and off the taskbar** (on Windows), with the S-kaupat site open, and sends each API call from inside that page, the way the website does. It is a normal browser window that does not disguise itself.
 
 - The window opens on the first S-kaupat call and closes itself after 3 minutes without calls. Closing it by hand is fine; the next call opens it again.
 - It uses the same profile as the login window (`%LOCALAPPDATA%\s-kaupat-mcp\login-browser` on Windows), so treat that folder like a password. While the login window is open, other tools answer `login_in_progress`.
@@ -290,4 +290,8 @@ The MCP layer depends only on the `SKaupatClient` interface, so the transport ch
 
 ## Not included yet
 
-Changing an order after it is placed (the site's order editing), and offers or receipts. A card payment always goes through the payment provider's page.
+Changing an order after it is placed (the site's order editing), and offers or receipts. A card payment always goes through the payment provider's page, and a real card payment has not been tried end to end yet (see `CHANGELOG.md`).
+
+## Licence
+
+Apache-2.0, see [LICENSE](LICENSE). Changes are listed in [CHANGELOG.md](CHANGELOG.md); what stays stable across 1.x is in [docs/embedding.md](docs/embedding.md#versions).

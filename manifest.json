@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "s-kaupat-mcp",
   "display_name": "S-kaupat",
-  "version": "0.12.2",
+  "version": "1.0.0-rc.1",
   "description": "Find S-kaupat stores, search groceries, fill your shopping lists and order with pickup or home delivery.",
   "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others) and a pickup time, search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. Claude can also place the order for you: it shows the summary with S-kaupat's own total and places the order only after you say yes. Card payment happens on the payment provider's page, which opens in the extension's own window; pay on delivery needs nothing more. Turn \"Allow ordering\" off in the settings if you only want lists.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 3 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
   "author": {
@@ -81,7 +81,7 @@
     }
   },
   "keywords": ["s-kaupat", "groceries", "shopping list", "prisma", "s-market", "alepa", "finland"],
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "compatibility": {
     "platforms": ["win32", "darwin", "linux"],
     "runtimes": { "node": ">=20.0.0" }

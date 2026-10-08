@@ -2,6 +2,7 @@ import type { BrowserContext, Page } from "playwright-core";
 import { SKaupatError } from "../errors.js";
 import { log } from "../log.js";
 import { launchProfile } from "./launch.js";
+import { hideFromTaskbar } from "./taskbar.js";
 
 /** What browserFetch needs from a page; a seam so tests can use a fake page. */
 export interface ApiPage {
@@ -18,6 +19,10 @@ export interface BrowserSessionOptions {
   idleMs?: number;
   /** Wait before the one retry when the profile is busy. Default 2 s. */
   busyRetryMs?: number;
+  /** Take the minimised window off the taskbar (Windows). Default true. */
+  hideFromTaskbar?: boolean;
+  /** Hides the window; replaced in tests. */
+  hideWindow?: (profileDir: string) => Promise<number>;
   /** Opens the browser; replaced in tests. */
   launch?: () => Promise<BrowserContext>;
 }
@@ -180,6 +185,9 @@ export class BrowserSession {
       // Edge does not always honour --start-minimized (for example when it restores the profile's last
       // window), so the window is also minimised through the browser's own window controls.
       await minimize(context, page);
+      // Off the taskbar too: the user never needs this window (the login and their own pages open
+      // in separate windows). Runs alongside the page load; on failure the button just stays.
+      if (this.options.hideFromTaskbar ?? true) void (this.options.hideWindow ?? hideFromTaskbar)(this.options.profileDir);
       await page.goto(this.startUrl, { waitUntil: "domcontentloaded" });
       // Edge may open its own start tab or restore old ones, sometimes only after the window is up
       // (seen live 2026-10-08: a leftover about:blank tab); one S-kaupat tab is all the window needs.

@@ -146,6 +146,24 @@ test("the browser starts on first use and API calls wait out the login window", 
   await session.close();
 });
 
+test("the API window is taken off the taskbar each time it starts, unless turned off", async () => {
+  const hidden: string[] = [];
+  const hideWindow = async (dir: string) => (hidden.push(dir), 1);
+  const session = new BrowserSession({ profileDir: "profile-a", hideWindow, launch: async () => fakeContext().context });
+  await session.apiPage();
+  await session.apiPage();
+  assert.deepEqual(hidden, ["profile-a"], "once per start, for this profile");
+  await session.close();
+  await session.apiPage();
+  assert.deepEqual(hidden, ["profile-a", "profile-a"]);
+  await session.close();
+
+  const off = new BrowserSession({ profileDir: "profile-b", hideFromTaskbar: false, hideWindow, launch: async () => fakeContext().context });
+  await off.apiPage();
+  assert.deepEqual(hidden, ["profile-a", "profile-a"]);
+  await off.close();
+});
+
 test("an idle browser closes itself", async () => {
   const c = fakeContext();
   const session = new BrowserSession({ profileDir: "unused", idleMs: 30, launch: async () => c.context });

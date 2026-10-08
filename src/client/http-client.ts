@@ -915,7 +915,7 @@ function mapProduct(p: z.infer<typeof ApiProductSchema>, storeId: string, observ
  * GraphQL's validation messages repeat the rejected value ("got invalid value {...}; Field \"x\" ...").
  * Keep the wording and field names, drop the values.
  */
-function redactValues(text: string): string {
+export function redactValues(text: string): string {
   return text
     .replace(/got invalid value .*?; /g, "got invalid value …; ")
     .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "…@…")

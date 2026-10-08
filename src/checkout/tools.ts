@@ -395,9 +395,10 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
       ctx.run("place_order", async () => {
         if (!ctx.orderingEnabled) throw new SKaupatError("orders_disabled", "place_order is turned off in this server's settings.");
         const review = reviews.get(confirmationCode);
+        // Used up at once, before any await: a double-pressed Order button must not place two orders.
+        reviews.delete(confirmationCode);
         if (!review || review.until < ctx.now().getTime()) {
-          reviews.delete(confirmationCode);
-          throw new SKaupatError("confirmation_required", "Unknown or expired confirmationCode; review the order again.");
+          throw new SKaupatError("confirmation_required", "Unknown, used or expired confirmationCode; review the order again.");
         }
         const draft = await buildDraft(input);
         // Get the token once: a retried login must never send the order twice.
@@ -415,7 +416,6 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
         if (fingerprint(draft, contact, summary.total[0]?.amount ?? null) !== review.fingerprint) {
           throw new SKaupatError("confirmation_required", "The order or its total changed after review_order.");
         }
-        reviews.delete(confirmationCode);
 
         // Express times need no reservation; others do when logged in (the site's rule).
         const reservation = draft.delivery.slot.express ? null : await ctx.checkout.reserveSlot(token, draft.delivery.slot.slotId);
@@ -448,13 +448,18 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
           if (toSKaupatError(err).code !== "order_uncertain") await release();
           throw err;
         }
-        ctx.orders.save({
-          orderId: order.orderId,
-          orderNumber: order.orderNumber,
-          accessToken: order.accessToken,
-          storeId: draft.storeId,
-          placedAt: ctx.now().toISOString(),
-        });
+        try {
+          ctx.orders.save({
+            orderId: order.orderId,
+            orderNumber: order.orderNumber,
+            accessToken: order.accessToken,
+            storeId: draft.storeId,
+            placedAt: ctx.now().toISOString(),
+          });
+        } catch (err) {
+          // The order exists: report it anyway. Without its saved token, cancelling may need the S-kaupat site.
+          log.warn("Could not save the order to the orders file", { code: (err as NodeJS.ErrnoException).code ?? "unknown" });
+        }
         log.info("Order placed", { orderNumber: order.orderNumber, payment: draft.payment.method });
         const { accessToken: _secret, ...shown } = order;
         const payment = await startPayment(order.orderId, draft.payment, paymentPage, token);

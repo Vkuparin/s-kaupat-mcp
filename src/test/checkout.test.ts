@@ -289,3 +289,39 @@ test("payment states follow the site's reading", () => {
   assert.equal(paymentState("on_delivery", null, "NEW"), "not_needed");
   assert.equal(paymentState("card", "PENDING", "CANCELLED"), "cancelled");
 });
+
+test("a double-pressed Order button places one order", async () => {
+  const { mcp, checkout } = await connect();
+  await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-1", slotId: SLOT });
+  const draft = { items: ITEMS, payment: { method: "on_delivery" } };
+  const review = await call(mcp, "review_order", draft);
+  const args = { ...draft, confirmationCode: review.data.confirmationCode };
+  const [a, b] = await Promise.all([call(mcp, "place_order", args), call(mcp, "place_order", args)]);
+  assert.deepEqual([a.isError, b.isError].sort(), [false, true]);
+  assert.equal((a.isError ? a : b).data.error.code, "confirmation_required");
+  assert.equal(checkout.calls.filter((c) => c.startsWith("order:")).length, 1);
+});
+
+test("HTTP adapter: S-kaupat's error text loses the user's values", async () => {
+  const api = new HttpCheckoutApi(
+    fakeApi({
+      CreateOrder: {
+        data: null,
+        errors: [{ message: 'Variable "$order" got invalid value {"customer":{"phone":"0401234567"}}; Field "x" is not defined by type "CustomerInput".' }],
+      },
+    }),
+  );
+  const order = {
+    storeId: "s",
+    slotId: "x",
+    reservationId: null,
+    items: [],
+    packagingId: "p",
+    contact: { firstName: "A", lastName: "B", phone: "0401234567", email: "e" },
+    address: null,
+    payment: "card" as const,
+    note: null,
+    discountCode: null,
+  };
+  await assert.rejects(api.createOrder("t", order), (e: any) => e.code === "upstream_error" && !e.message.includes("0401234567") && e.message.includes('Field "x"'));
+});

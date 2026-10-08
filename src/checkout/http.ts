@@ -1,6 +1,6 @@
 import { SKaupatError, toSKaupatError } from "../errors.js";
 import { log } from "../log.js";
-import type { GraphQLBody } from "../client/http-client.js";
+import { redactValues, type GraphQLBody } from "../client/http-client.js";
 import type {
   CheckoutApi,
   CreatedOrder,
@@ -354,16 +354,22 @@ function throwOrderError(body: GraphQLBody, stage: "slot" | "order" | "payment")
       contactCustomerService: has("UnpaidDebtContactCustomerServiceError"),
     });
   }
+  // Errors next to a usable answer (a payment page, an authorisation) are warnings, not failures.
+  if (body.data && Object.values(body.data).some((v) => v !== null)) return;
   const refusal = errors.map((e) => str(e.extensions?.refusalReason)).find(Boolean) ?? null;
-  if (stage === "payment" || has("PaymentCardNotFoundError") || has("PaymentCardRegistrationError") || has("PossiblePaymentInputError") || refusal) {
-    throw new SKaupatError("payment_failed", `Payment step refused (${types.filter(Boolean).join(", ") || "no type"}).`, {
+  const typeList = types.filter(Boolean).join(", ") || "no type";
+  if (stage === "payment" || has("PaymentCardNotFoundError") || has("PaymentCardRegistrationError")) {
+    throw new SKaupatError("payment_failed", `Payment step refused (${typeList}).`, {
       reason: refusal ? refusal.toLowerCase() : has("PaymentCardNotFoundError") ? "card_not_found" : null,
     });
   }
-  if (body.data && Object.values(body.data).some((v) => v !== null)) return;
-  // Only the error type names and S-kaupat's message reach the log: never the order's own values.
+  if (has("PossiblePaymentInputError") || refusal) {
+    // Refused while creating the order: there is nothing to pay; the details need changing.
+    throw new SKaupatError("order_not_ready", `S-kaupat refused the order (${typeList}).`, { reason: refusal ? refusal.toLowerCase() : null });
+  }
+  // Only the error type names reach the log; S-kaupat's message may quote the order's own values.
   log.warn("Checkout call failed", { stage, types: types.filter(Boolean) });
-  throw new SKaupatError("upstream_error", errors[0]?.message?.slice(0, 200) ?? "S-kaupat returned an error.");
+  throw new SKaupatError("upstream_error", redactValues(errors[0]?.message ?? "S-kaupat returned an error.").slice(0, 200));
 }
 
 function reservation(raw: unknown): Reservation {

@@ -40,6 +40,14 @@ Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 - [ ] Remove one product; delete the list. (2026-10-08: Ville deleted the test list on the site; reading it then answered `upstream_error` instead of `list_not_found`, fixed in 0.5.1.)
 - [ ] On s-kaupat.fi, "Lisää kaikki ostoskoriin" puts a list's products in the cart. (2026-10-08: the list showed correctly on the site; the button first asked for a store/delivery location. 0.4.2 says so in `nextStep`. Recheck that the products land in the cart after picking it.)
 
+## 7b. Pickup time (0.6.0)
+Read-only against S-kaupat, except the list in the last step.
+- [ ] `get_delivery_options` for Prisma Herttoniemi lists its pickup options, each with a fee and a next free time that match the site's "Valitse toimitustapa".
+- [ ] `get_delivery_slots` for one option: days and times match the site's calendar, with the same fees; full times are `full`, not `available`. Check `unknown` doesn't appear (a status this server doesn't know yet).
+- [ ] `select_delivery` with a free time; `get_setup_status` shows it.
+- [ ] `check_basket` on a list answers per product.
+- [ ] On the site, picking what `siteInstruction` says and pressing "Lisää kaikki ostoskoriin" puts the list in the cart.
+
 ## 8. Two apps at once
 - [ ] With two apps running the server, the second one gets `browser_busy` while the first one's window is open, and works after it closes.
 

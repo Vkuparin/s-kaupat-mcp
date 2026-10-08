@@ -283,6 +283,8 @@ Favourites: `userFavorites { items { ean product(storeId) } }`, `userFavoritesAd
 - `deliverySlot(id, reservationId)`, `searchPickupDeliveryAreas(storeId, freetext, pageSize) { areas { areaId store } }`, `addressAutosuggest(countryCode, query, searchContext)`.
 - Slot reservation mutations: `createDeliverySlotReservation(deliverySlotId) { reservationId expiresAt }`, `refreshDeliverySlotReservation`, `releaseDeliverySlotReservation`.
 - Delivery area ids are UUIDs. The selected store and area are local browser state (`selectedStoreId`, `selectedAreaId`, `selectedBrand` `@client`), not stored server-side.
+- The site's own picker ("Valitse toimitustapa", described by the owner 2026-10-08): type an address (a street address; a bare city such as "Helsinki" finds nothing), pick Nouto, Kotiinkuljetus or Pikatoimitus (only some stores; the site lists nearby ones), then a day in a calendar and a time, each time with its own fee. The query that lists areas for an address is loaded lazily by the picker and was not in the saved page load 🟡. Enum values (`DeliveryMethod`, slot `availability`, `AddressSearchContext`) have not been seen live yet; the server maps `PICKUP` and `HOME_DELIVERY`, availability containing FULL or AVAILABLE, and reports anything else as `unknown` 🟡.
+- What the server uses (0.6.0): `searchPickupDeliveryAreas` for a store's pickup areas, then one aliased `deliveryArea` query for their details and `nextDeliverySlot`, and `deliveryArea(id) { … deliverySlots(startDate, endDate) }` for the calendar. Nothing is reserved; `validateCart` gets the chosen `deliveryDate`, `slotId` and `areaId`.
 
 ### Orders and payment (never automate without explicit confirmation)
 

@@ -244,6 +244,14 @@ export interface BasketCheck {
   label: string | null;
 }
 
+/** The chosen delivery or pickup time, so the cart check answers for that day. */
+export interface BasketDelivery {
+  /** YYYY-MM-DD. */
+  date: string;
+  slotId: string;
+  areaId: string;
+}
+
 /**
  * The reusable retailer client. The MCP layer depends only on this interface,
  * so the transport (direct HTTP, managed browser, extension) can change after
@@ -262,6 +270,9 @@ export interface SKaupatClient {
   browseCategory(input: BrowseCategoryInput): Promise<CategoryProductsResult>;
   /** Products by EAN with their sokId, for list writes. Unknown or unsold EANs are missing from the map. */
   getListableProducts(storeId: string, ids: string[]): Promise<Map<string, ListableProduct>>;
-  /** S-kaupat's anonymous cart check (validateCart) for these products and quantities in one store. */
-  checkBasket(storeId: string, items: { id: string; quantity: number }[]): Promise<Map<string, BasketCheck>>;
+  /**
+   * S-kaupat's anonymous cart check (validateCart) for these products and quantities in one store,
+   * for a chosen delivery or pickup time when given.
+   */
+  checkBasket(storeId: string, items: { id: string; quantity: number }[], delivery?: BasketDelivery): Promise<Map<string, BasketCheck>>;
 }

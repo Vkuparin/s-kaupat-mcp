@@ -24,9 +24,11 @@ async function connect(
     selection,
     auth = new FixtureAuth(),
     lists = client instanceof FixtureSKaupatClient ? client : undefined,
-  }: { selection?: StoreSelection; auth?: SKaupatAuth; lists?: ShoppingListApi } = {},
+    now,
+  }: { selection?: StoreSelection; auth?: SKaupatAuth; lists?: ShoppingListApi; now?: () => Date } = {},
 ) {
-  const server = createServer(client, auth, { selection, lists });
+  const delivery = client instanceof FixtureSKaupatClient ? client : undefined;
+  const server = createServer(client, auth, { selection, lists, delivery, now });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), mcp.connect(clientTransport)]);
@@ -44,8 +46,12 @@ test("lists the catalogue, store, login and shopping list tools", async () => {
   assert.deepEqual(tools.map((t) => t.name).sort(), [
     "add_to_shopping_list",
     "browse_category",
+    "check_basket",
+    "clear_delivery",
     "create_shopping_list",
     "delete_shopping_list",
+    "get_delivery_options",
+    "get_delivery_slots",
     "get_product_details",
     "get_products",
     "get_selected_store",
@@ -57,6 +63,7 @@ test("lists the catalogue, store, login and shopping list tools", async () => {
     "remove_from_shopping_list",
     "search_products",
     "search_stores",
+    "select_delivery",
     "select_store",
     "start_login",
   ]);

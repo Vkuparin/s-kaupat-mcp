@@ -76,7 +76,24 @@ The result has one entry per product. Show it as a short checklist:
 
 `summary` has the counts for a one-line answer ("5 products added, 1 not available in this store"). `list.estimatedTotal` is the total at shelf prices; when `complete` is `false`, say "about".
 
-Then show `nextStep` in the user's language: the user opens the list on the S-kaupat site or app, presses **Lisää kaikki ostoskoriin** (add all to cart) and checks out there. The site keeps its own store choice, so the first time it asks the user to pick the store and pickup or home delivery before the products go to the cart; `nextStep` says so and names the store chosen here.
+Then show `nextStep` in the user's language: the user opens the list on the S-kaupat site or app, presses **Lisää kaikki ostoskoriin** (add all to cart) and checks out there. The site keeps its own store choice, so it asks the user to pick the store and pickup or home delivery before the products go to the cart; `nextStep` says so and names the store chosen here, or the exact pickup time when one was chosen (section 5b).
+
+## 5b. Choosing a pickup time
+
+Optional, but it saves the user a step on the site and lets the app check the basket for the right day. The site calls this **Valitse toimitustapa**. Walk it as one screen per step, and keep a "Back" on each:
+
+1. **How to get it.** `get_delivery_options` lists the ways to get the order from the chosen store. Show each `option` as a card: `name`, the fee (`price`), `address`, and "next free: …" from `nextSlot`. `method` is `pickup` (Nouto), `home_delivery` (Kotiinkuljetus) or `express` (Pikatoimitus). For now only pickup options come back; home delivery and express need the user's address and are listed in `methodsNotYetSupported`, so leave them out of the screen.
+2. **Day.** `get_delivery_slots` with the option's `areaId` returns `days`, each with `availableCount`. Show a week as a row of days and grey out days with `availableCount: 0`. Ask for the next week with `fromDate`.
+3. **Time.** The chosen day's `slots`, each with `start`–`end` and its own fee. Only `available` can be chosen; show `full` and `closed` greyed out, and treat `unknown` like `full`. Times are ISO; show them in Finnish local time.
+4. **Summary.** `select_delivery` with `areaId` and `slotId`. If someone took the time meanwhile it fails with `slot_unavailable` (action `choose_delivery_time`): show the times again. On success show `delivery` as a confirmation: place, day, time and fee.
+
+Times fill up and prices change, so read the calendar fresh each time the screen opens and don't keep it in the app. The choice is remembered like the store, and `get_setup_status` returns it as `delivery`. When the time has passed, `delivery.status` is `expired` and `nextStep` is `choose_delivery`: show step 1 again with a short note.
+
+The time is **not reserved** on S-kaupat. The site keeps its own choice in the browser, so after "Lisää kaikki ostoskoriin" the user picks the same place and time on the site. `delivery.siteInstruction` (also in a list's `nextStep`) says exactly what to tap, in Finnish and English, for example:
+
+> Valitse sivulla "Valitse toimitustapa": Nouto, Prisma Herttoniemi, pe 9.10. klo 16:00–18:00.
+
+**Check the basket for that day.** `check_basket` with a `listId` (or `items`) asks S-kaupat whether each product can be ordered for the chosen time. Show problems next to the product, using `label` (S-kaupat's own words, e.g. "Tilapäisesti loppu") when there is one. `checkedFor` is `null` when no time is chosen; then the check is for the store in general.
 
 ## 6. Errors
 
@@ -102,6 +119,8 @@ Show `userMessage`, then offer what `action` says:
 | `log_in` | The "Log in" button (`start_login`) |
 | `finish_login` | "Finish logging in in the S-kaupat window", then try again |
 | `choose_store` | The store picker |
+| `choose_delivery` | The pickup options again (step 1 of 5b) |
+| `choose_delivery_time` | The times again (step 2 of 5b) |
 | `retry` | A "Try again" button. Retry automatically at most once, after a few seconds |
 | `check_list` | Show the list again so the user sees what is on it |
 | `refresh_lists` | The list was deleted (perhaps on the site); show the lists again |

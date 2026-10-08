@@ -3,10 +3,13 @@ import { isProductUnavailableError, listNotFound, SKaupatError, storeNotFound } 
 import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi, ShoppingListItem } from "../lists/types.js";
+import { deliveryMethod, euros, isoTime, slotDate, slotStatus } from "../delivery/format.js";
+import type { DeliveryApi, DeliveryArea, DeliveryCalendar, DeliverySlot } from "../delivery/types.js";
 import type {
   Allergen,
   AllergenLevel,
   BasketCheck,
+  BasketDelivery,
   BrowseCategoryInput,
   Category,
   CategoryProductsResult,
@@ -109,12 +112,36 @@ const LISTABLE_PRODUCTS_QUERY = `query RemoteListableProducts($storeId: ID!, $ea
   }
 }`;
 
-const CHECK_BASKET_QUERY = `query RemoteCheckBasket($items: [PartialCartItemInput!]!, $storeId: ID!) {
-  validateCart(partialCartItems: $items, storeId: $storeId) {
+const CHECK_BASKET_QUERY = `query RemoteCheckBasket($items: [PartialCartItemInput!]!, $storeId: ID!, $deliveryDate: String, $slotId: ID, $areaId: ID) {
+  validateCart(partialCartItems: $items, storeId: $storeId, deliveryDate: $deliveryDate, slotId: $slotId, areaId: $areaId) {
     cartValidationItems { ean labels { labelText } validationError { __typename
       ... on ProductAvailabilityError { labelText } } }
   }
 }`;
+
+/** Delivery fields, all seen in the site's own deliveryArea and deliverySlot queries (docs/s-kaupat-api.md section 5). */
+const AREA_FIELDS =
+  "areaId name storeId price description deliveryMethod isFastTrack alcoholSellingAllowed " +
+  "store { id name } address { street postalCode city }";
+const NEXT_SLOT_FIELDS = "nextDeliverySlot { slotId startDateTime price availability isClosed isFastTrack }";
+const SLOT_FIELDS = "slotId areaId isClosed availability startDateTime endDateTime closingTimestamp price isFastTrack";
+/** At most this many pickup areas are described per store, in one request. */
+const MAX_PICKUP_AREAS = 6;
+
+const PICKUP_AREAS_QUERY = `query SearchPickupDeliveryAreas($storeId: ID!, $freetext: String) {
+  searchPickupDeliveryAreas(storeId: $storeId, freetext: $freetext, pageSize: ${MAX_PICKUP_AREAS}) { areas { areaId } }
+}`;
+
+const DELIVERY_CALENDAR_QUERY = `query GetDeliveryArea($id: ID!, $startDate: String, $endDate: String) {
+  deliveryArea(id: $id) { ${AREA_FIELDS} deliverySlots(startDate: $startDate, endDate: $endDate) { date deliveryTimes { ${SLOT_FIELDS} } } }
+}`;
+
+/** Several areas with their next free slot in one request, each under its own alias. */
+function deliveryAreasQuery(count: number): string {
+  const vars = Array.from({ length: count }, (_, i) => `$a${i}: ID!`).join(", ");
+  const fields = Array.from({ length: count }, (_, i) => `a${i}: deliveryArea(id: $a${i}) { ${AREA_FIELDS} ${NEXT_SLOT_FIELDS} }`).join(" ");
+  return `query GetDeliveryAreaWithNextSlot(${vars}) { ${fields} }`;
+}
 
 /** One shopping list with each item's product priced in $storeId. Items are a union in S-kaupat's schema. */
 const LIST_FIELDS =
@@ -211,7 +238,7 @@ const GraphQLErrorsSchema = z.object({
   ),
 });
 
-export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
+export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, DeliveryApi {
   private readonly apiUrl: string;
   private readonly origin: string;
   private readonly timeoutMs: number;
@@ -381,9 +408,16 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
     return found;
   }
 
-  async checkBasket(storeId: string, items: { id: string; quantity: number }[]): Promise<Map<string, BasketCheck>> {
+  async checkBasket(
+    storeId: string,
+    items: { id: string; quantity: number }[],
+    delivery?: BasketDelivery,
+  ): Promise<Map<string, BasketCheck>> {
     const raw = await this.post("RemoteCheckBasket", CHECK_BASKET_QUERY, {
       storeId,
+      deliveryDate: delivery?.date ?? null,
+      slotId: delivery?.slotId ?? null,
+      areaId: delivery?.areaId ?? null,
       // PartialCartItemInput.itemCount is a string.
       items: items.map((i) => ({ ean: i.id, itemCount: String(i.quantity) })),
     });
@@ -409,6 +443,51 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
       });
     }
     return checks;
+  }
+
+  // Delivery and pickup (no login needed).
+
+  async getPickupAreas(storeId: string): Promise<DeliveryArea[]> {
+    const raw = await this.post("SearchPickupDeliveryAreas", PICKUP_AREAS_QUERY, { storeId, freetext: null });
+    const parsed = PickupAreasResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected pickup area response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected pickup area response.");
+    }
+    const ids = [...new Set((parsed.data.data.searchPickupDeliveryAreas?.areas ?? []).map((a) => a.areaId))].slice(0, MAX_PICKUP_AREAS);
+    if (ids.length === 0) return [];
+    const variables = Object.fromEntries(ids.map((id, i) => [`a${i}`, id]));
+    const details = await this.post("GetDeliveryAreaWithNextSlot", deliveryAreasQuery(ids.length), variables);
+    const areas = DeliveryAreasResponseSchema.safeParse(details);
+    if (!areas.success) {
+      log.warn("Unexpected delivery area response", { issues: areas.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected delivery area response.");
+    }
+    const now = new Date();
+    return ids.flatMap((_, i) => {
+      const area = areas.data.data[`a${i}`];
+      return area ? [mapDeliveryArea(area, now)] : [];
+    });
+  }
+
+  async getDeliveryCalendar(areaId: string, startDate: string, endDate: string): Promise<DeliveryCalendar | null> {
+    const raw = await this.post("GetDeliveryArea", DELIVERY_CALENDAR_QUERY, { id: areaId, startDate, endDate });
+    const parsed = DeliveryCalendarResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected delivery calendar response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected delivery calendar response.");
+    }
+    const area = parsed.data.data.deliveryArea;
+    if (!area) return null;
+    const now = new Date();
+    const slots = (area.deliverySlots ?? [])
+      .flatMap((day) => day.deliveryTimes ?? [])
+      .flatMap((t) => {
+        const slot = mapSlot(t, area.areaId, now);
+        return slot ? [slot] : [];
+      })
+      .sort((a, b) => a.start.localeCompare(b.start));
+    return { area: mapDeliveryArea(area, now), slots };
   }
 
   // Shopping lists (need a login).
@@ -832,5 +911,87 @@ function mapProductDetails(p: z.infer<typeof ApiProductDetailSchema>, storeId: s
     countryOfOrigin: p.countryName?.fi ?? null,
     supplier: p.supplierName ?? null,
     netWeightKg: p.measurement?.netWeight ?? null,
+  };
+}
+
+const NumberOrString = z.union([z.number(), z.string()]);
+
+const ApiSlotSchema = z
+  .object({
+    slotId: z.string(),
+    areaId: z.string().nullish(),
+    isClosed: z.boolean().nullish(),
+    availability: z.string().nullish(),
+    startDateTime: z.string().nullish(),
+    endDateTime: z.string().nullish(),
+    closingTimestamp: NumberOrString.nullish(),
+    price: NumberOrString.nullish(),
+    isFastTrack: z.boolean().nullish(),
+  })
+  .passthrough();
+
+const ApiDeliveryAreaSchema = z
+  .object({
+    areaId: z.string(),
+    name: z.string().nullish(),
+    storeId: z.string().nullish(),
+    price: NumberOrString.nullish(),
+    description: z.string().nullish(),
+    deliveryMethod: z.string().nullish(),
+    isFastTrack: z.boolean().nullish(),
+    alcoholSellingAllowed: z.boolean().nullish(),
+    store: z.object({ id: z.string().nullish(), name: z.string().nullish() }).passthrough().nullish(),
+    address: z
+      .object({ street: z.string().nullish(), postalCode: z.string().nullish(), city: z.string().nullish() })
+      .passthrough()
+      .nullish(),
+    nextDeliverySlot: ApiSlotSchema.nullish(),
+    deliverySlots: z
+      .array(z.object({ date: z.string().nullish(), deliveryTimes: z.array(ApiSlotSchema).nullish() }).passthrough())
+      .nullish(),
+  })
+  .passthrough();
+
+const PickupAreasResponseSchema = z.object({
+  data: z.object({
+    searchPickupDeliveryAreas: z.object({ areas: z.array(z.object({ areaId: z.string() }).passthrough()).nullish() }).nullish(),
+  }),
+});
+
+const DeliveryAreasResponseSchema = z.object({ data: z.record(z.string(), ApiDeliveryAreaSchema.nullable()) });
+
+const DeliveryCalendarResponseSchema = z.object({ data: z.object({ deliveryArea: ApiDeliveryAreaSchema.nullable() }) });
+
+/** A slot without a start time can't be shown or chosen, so it is left out. */
+function mapSlot(t: z.infer<typeof ApiSlotSchema>, areaId: string, now: Date): DeliverySlot | null {
+  const start = isoTime(t.startDateTime);
+  if (!start) return null;
+  const closesAt = isoTime(t.closingTimestamp);
+  return {
+    slotId: t.slotId,
+    areaId: t.areaId ?? areaId,
+    date: slotDate(start),
+    start,
+    end: isoTime(t.endDateTime),
+    price: euros(t.price),
+    status: slotStatus(t.isClosed, t.availability, closesAt, now),
+    closesAt,
+    express: t.isFastTrack === true,
+  };
+}
+
+function mapDeliveryArea(a: z.infer<typeof ApiDeliveryAreaSchema>, now: Date): DeliveryArea {
+  const address = a.address ? { street: a.address.street ?? null, postalCode: a.address.postalCode ?? null, city: a.address.city ?? null } : null;
+  return {
+    areaId: a.areaId,
+    name: a.name ?? null,
+    method: deliveryMethod(a.deliveryMethod, a.isFastTrack),
+    storeId: a.storeId ?? a.store?.id ?? null,
+    storeName: a.store?.name ?? null,
+    price: euros(a.price),
+    description: a.description?.trim() || null,
+    address: address && (address.street || address.postalCode || address.city) ? address : null,
+    alcoholAllowed: a.alcoholSellingAllowed ?? null,
+    nextSlot: a.nextDeliverySlot ? mapSlot(a.nextDeliverySlot, a.areaId, now) : null,
   };
 }

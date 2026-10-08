@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.5.1)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.6.0)**. Catalogue, store-selection, login, shopping list and pickup-time tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -15,7 +15,7 @@ All of these are built by the Release workflow in GitHub Actions.
 
 | Tool | Input | Returns |
 |---|---|---|
-| `get_setup_status` | none | For an app's first screen: the chosen store, login status, `canSearch`, `canUseLists`, and `nextStep` (`choose_store`, `log_in` or `null`). Never opens a window |
+| `get_setup_status` | none | For an app's first screen: the chosen store, login status, `canSearch`, `canUseLists`, and the chosen pickup time (`delivery`) and `nextStep` (`choose_store`, `log_in`, `choose_delivery` or `null`). Never opens a window |
 | `search_stores` | `query` (name, city or postal code), `chain`, `limit`, `includeOpeningHours` | Picker-ready stores: ID, name, chain, address, coordinates, online ordering, today's opening hours, whether it is the selected store |
 | `select_store` | `storeId` | Saves the user's store and returns it with opening hours for the coming week |
 | `get_selected_store` | none | The saved store with opening hours, or `selectedStore: null` when none is chosen yet |
@@ -32,6 +32,11 @@ All of these are built by the Release workflow in GitHub Actions.
 | `add_to_shopping_list` | `listId`, `items[]` (`productId`, `quantity`, `allowSubstitutes`), `storeId` (optional) | Per product: `added`, `updated`, `unchanged`, `missing` or `uncertain`. Needs login |
 | `remove_from_shopping_list` | `listId`, `productIds[]` | The list afterwards, with `removed` and `notOnList`. Needs login |
 | `delete_shopping_list` | `listId` | Deletes the whole list. Needs login |
+| `get_delivery_options` | `storeId` (optional) | Pickup options of the store: `areaId`, `method` (`pickup`, `home_delivery`, `express`), base fee, address and the next free time. Home delivery and express (they need an address) are not listed yet |
+| `get_delivery_slots` | `areaId`, `fromDate` (optional), `days` (1 to 14) | A calendar: per day, times with start, end, fee and `status` (`available`, `full`, `closed`, `unknown`) |
+| `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
+| `clear_delivery` | none | Forgets the chosen time |
+| `check_basket` | `listId` or `items[]`, `storeId` (optional) | Per product, whether it can be ordered for the chosen time: `ok`, `unavailable` (with S-kaupat's label), `not_in_store`, `not_found` or `unknown` |
 
 Prices are per store. Product tools use the store chosen with `select_store` unless a `storeId` is passed, and fail with `store_not_selected` when there is neither. Fields S-kaupat does not report come back as `null` (or `"unknown"`) rather than guessed.
 

@@ -73,7 +73,7 @@ await client.connect(clientSide);
 await runtime.close();
 ```
 
-One runtime holds the login, the browser window and the store choice. `createMcpServer()` can be called again for more connections; they all share that state. The library also exports `USER_MESSAGES`, `ERROR_ACTIONS` and the error and config types.
+One runtime holds the login, the browser window, the store choice and orders waiting for the user's Order press. `createMcpServer()` can be called again for more connections; they all share that state, so an order reviewed on one connection can be placed on another. The library also exports `USER_MESSAGES`, `ERROR_ACTIONS` and the error and config types.
 
 ## Settings
 

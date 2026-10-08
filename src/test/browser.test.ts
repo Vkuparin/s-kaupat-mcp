@@ -109,7 +109,7 @@ function fakeContext() {
   const context = {
     pages: () => [page],
     newPage: async () => page,
-    on: (_event: string, fn: () => void) => listeners.push(fn),
+    on: (event: string, fn: () => void) => event === "close" && listeners.push(fn),
     close: async () => {
       closed = true;
       listeners.forEach((fn) => fn());

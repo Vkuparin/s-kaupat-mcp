@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "s-kaupat-mcp",
   "display_name": "S-kaupat",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Find S-kaupat stores, search groceries and fill your S-kaupat shopping lists.",
   "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others), search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. You finish on the S-kaupat site by pressing \"Lisää kaikki ostoskoriin\" on the list and checking out; this extension never places orders or touches payment.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 10 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
   "author": {

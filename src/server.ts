@@ -18,7 +18,7 @@ import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 import { OrderReviews } from "./checkout/reviews.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "1.0.0-rc.1";
+export const SERVER_VERSION = "1.0.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "1.0";
 

@@ -14,6 +14,7 @@ import type {
   OrderSummary,
   OrderValidation,
   PackagingOption,
+  PastOrderItem,
   PaymentMethod,
   PaymentState,
   Reservation,
@@ -77,6 +78,9 @@ const HISTORY_QUERY = `query GetOrderHistory($domain: Domain, $dataSources: [Use
   userOrders(domain: $domain, dataSources: $dataSources, limit: $limit) { id createdAt storeName storeId deliveryDate
     deliveryMethod deliveryTime totalCost orderStatus orderNumber isModifiable isCancelable isFastTrack trackingUrl
     paymentMethod paymentStatus paymentLink { url } } }`;
+const ORDER_ITEMS_QUERY = `query GetOrderCopyDataById($id: ID!) { order(id: $id) { id orderNumber
+  cartItems { ean itemCount name price priceUnit additionalInfo replace product { id productType pricing { salesUnit } } } } }`;
+const LOCKER_QUERY = "query GetOrderWithLockerById($id: ID!) { order(id: $id) { orderNumber locker { pin } } }";
 const CANCEL_MUTATION = "mutation CancelOrder($id: ID!) { cancelOrder(id: $id) { id orderStatus } }";
 
 const API_PAYMENT: Record<PaymentMethod, string> = { card: "CARD_PAYMENT", invoice: "INVOICE", on_delivery: "ON_DELIVERY" };
@@ -282,6 +286,42 @@ export class HttpCheckoutApi implements CheckoutApi {
     const data = await this.data("GetOrderHistory", HISTORY_QUERY, { domain: "S_KAUPAT", dataSources: ["S_KAUPAT"], limit }, { accessToken });
     const list = Array.isArray(data.userOrders) ? data.userOrders : [];
     return list.map((raw) => mapHistoryEntry(obj(raw)));
+  }
+
+  async getOrderItems(accessToken: string, orderId: string, orderToken: string | null): Promise<PastOrderItem[] | null> {
+    const body = await this.api.graphql("GetOrderCopyDataById", ORDER_ITEMS_QUERY, { id: orderId }, { accessToken, orderToken, rawErrors: true });
+    const order = body.data?.order;
+    if (!order) {
+      if (body.errors?.length && !body.errors.some((e) => /not ?found/i.test(e.message ?? ""))) throwOrderError(body, "order");
+      return null;
+    }
+    const rows = obj(order).cartItems;
+    return (Array.isArray(rows) ? rows : []).flatMap((raw) => {
+      const r = obj(raw);
+      const product = obj(r.product);
+      const ean = str(r.ean);
+      const quantity = num(r.itemCount);
+      // Packaging, bags and fees are rows too; only products can be ordered again.
+      const type = str(product.productType)?.toUpperCase();
+      if (!ean || quantity === null || quantity <= 0 || (type && type !== "PRODUCT")) return [];
+      const unit = (str(obj(product.pricing).salesUnit) ?? str(r.priceUnit))?.toUpperCase() ?? null;
+      return [
+        {
+          productId: ean,
+          name: str(r.name)?.trim() || null,
+          quantity,
+          unit,
+          price: num(r.price),
+          allowSubstitutes: r.replace !== false,
+          note: str(r.additionalInfo)?.trim() || null,
+        },
+      ];
+    });
+  }
+
+  async getLockerPin(accessToken: string, orderId: string, orderToken: string | null): Promise<string | null> {
+    const body = await this.api.graphql("GetOrderWithLockerById", LOCKER_QUERY, { id: orderId }, { accessToken, orderToken, rawErrors: true });
+    return str(obj(obj(body.data?.order).locker).pin);
   }
 
   private async data(

@@ -153,6 +153,21 @@ export interface OrderInfo {
   trackingUrl: string | null;
 }
 
+/** A product row of an earlier order, for "order the same again". */
+export interface PastOrderItem {
+  /** EAN, as search_products and the list and order tools use it. */
+  productId: string;
+  name: string | null;
+  /** Pieces, or kilograms for products sold by weight. */
+  quantity: number;
+  /** "KPL" or "KG" when known. */
+  unit: string | null;
+  /** The price the order had for one unit, in euros (today's price may differ). */
+  price: number | null;
+  allowSubstitutes: boolean;
+  note: string | null;
+}
+
 /** One order in the account's history (the site's "Tilaukset"), placed here or on the site. */
 export interface OrderHistoryEntry extends Omit<OrderInfo, "summary"> {
   createdAt: string | null;
@@ -202,4 +217,8 @@ export interface CheckoutApi {
   cancelOrder(accessToken: string, orderId: string, orderToken: string | null): Promise<OrderInfo["state"]>;
   /** The account's S-kaupat orders, newest first as S-kaupat lists them. */
   getOrderHistory(accessToken: string, limit: number): Promise<OrderHistoryEntry[]>;
+  /** The products of one of the account's orders (fees and packaging left out); null when not found. */
+  getOrderItems(accessToken: string, orderId: string, orderToken: string | null): Promise<PastOrderItem[] | null>;
+  /** The PIN for collecting a pickup-locker order, when S-kaupat has one. Secret: never log it. */
+  getLockerPin(accessToken: string, orderId: string, orderToken: string | null): Promise<string | null>;
 }

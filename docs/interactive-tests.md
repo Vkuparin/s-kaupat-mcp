@@ -27,6 +27,9 @@ Install the newest `s-kaupat-<version>.mcpb`: Claude Desktop → Settings → Ex
 - [ ] Pay on delivery (if your store offers it): the order shows on the site under your orders; cancel it from Claude.
 - [ ] Card: the payment page opens in the extension's own window. Cancel there: `get_order` says awaiting payment; then cancel the order from Claude. (A real card payment is your call.)
 
+- [ ] Ask Claude to order the same as your last order: `get_order_items` lists its products without bags and fees, and the review shows today's prices. (Don't place it.)
+- [ ] If you have a pickup-locker order, `get_order` shows its PIN, the same as in the S-kaupat app.
+- [ ] Ask Claude to log out: `login_status` says logged out, and the next login window asks for your account instead of logging you in by itself. Log in again afterwards.
 - [ ] Ask Claude for your orders: `get_orders` lists the same orders as the site's order page (the cancelled test order 1440991558 under past).
 
 ## 5. Shopping list on the site

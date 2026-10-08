@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { HttpAuthApi } from "./auth/auth-api.js";
 import { FixtureAuth } from "./auth/fixture-auth.js";
+import { forgetSiteSession } from "./browser/forget-session.js";
 import { BrowserLoginWindow } from "./auth/login-window.js";
 import { LiveAuth } from "./auth/session.js";
 import { createTokenStore } from "./auth/token-store.js";
@@ -99,6 +100,10 @@ function liveParts(config: SKaupatConfig): Parts {
     // With the browser transport, renewing in the background would open the S-kaupat window while
     // nobody uses it; the login is renewed on the next call instead.
     backgroundRenewal: !browser,
+    forgetSiteSession: () => {
+      const forget = () => forgetSiteSession({ profileDir, executablePath, siteUrl: config.loginUrl ?? undefined });
+      return browser ? browser.whileClosed(forget) : forget();
+    },
   });
   const client = new HttpSKaupatClient({ fetchImpl });
   return { client, auth, browser, checkout: new HttpCheckoutApi(client) };

@@ -59,6 +59,7 @@ test("lists the catalogue, store, login, shopping list, delivery and checkout to
     "get_delivery_options",
     "get_delivery_slots",
     "get_order",
+    "get_order_items",
     "get_orders",
     "get_product_details",
     "get_products",
@@ -68,6 +69,7 @@ test("lists the catalogue, store, login, shopping list, delivery and checkout to
     "get_shopping_lists",
     "get_site_choice",
     "list_categories",
+    "log_out",
     "login_status",
     "open_site",
     "pay_order",
@@ -237,6 +239,7 @@ test("start_login reports cancelled with a message to show", async () => {
     status: async () => ({ status: "logged_out", displayName: null }),
     startLogin: async () => ({ status: "cancelled", displayName: null, alreadyLoggedIn: false }),
     getAccessToken: async () => assert.fail(),
+    logout: async () => {},
   };
   const mcp = await connect(undefined, { auth });
   const { isError, data } = await call(mcp, "start_login", { timeoutSeconds: 60 });
@@ -254,6 +257,7 @@ test("auth errors reach the caller with code and Finnish and English messages", 
       throw new SKaupatError("login_window_unavailable", "no browser");
     },
     getAccessToken: async () => assert.fail(),
+  logout: async () => {},
   };
   const mcp = await connect(undefined, { auth });
   const { isError, data } = await call(mcp, "start_login", {});

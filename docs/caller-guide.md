@@ -53,6 +53,8 @@ Call `start_login` only after the user asks for it. If the app is an AI assistan
 
 When S-kaupat ends the login, calls answer `session_expired` and the app shows the "Log in" button again.
 
+A "Log out" (or "Switch account") button calls `log_out`. It forgets the login on this device, including the session in the server's own browser, so the next `start_login` asks for the account again; nothing changes on the S-kaupat account. Use it on a shared computer, or when someone else in the family wants to order with their own account.
+
 ## 4. Finding products
 
 - `search_products` with Finnish search words works best (`maito`, `ruisleipä`, `kahvi`). Use `sort: "price_asc"` for "cheapest", and `offset` for "show more".
@@ -132,6 +134,8 @@ The whole order can happen in the app's own screens. The only step outside it is
    - `paymentPage: "later"` creates the order without starting a payment; `pay_order` starts it.
    Then call `get_order` (for example every few seconds while the payment screen is up, and when the app comes back to front): `payment` turns `paid` when done. On `payment_failed` offer `pay_order` again (another card) or `cancel_order`. An unpaid card order is not picked: S-kaupat cancels it if it stays unpaid.
 5. **After.** `get_order` with no `orderId` lists the orders placed through the app; with an `orderId` it gives the state (`received`, `being_picked`, `done`, `cancelled`), payment, S-kaupat's summary and `isCancelable`. `cancel_order` cancels while S-kaupat allows it; ask the user to confirm first. For an "Orders" screen use `get_orders`: all the account's S-kaupat orders, also those made on the site, in three groups like the site's order page: `needsPayment` (show first, with `pay_order` for orders with `placedHere: true`, otherwise `paymentLinkUrl`), `active` and `past`.
+6. **Collecting from a locker.** For a pickup-locker order `get_order` returns `lockerPin`, the code that opens the locker, so the user does not need the S-kaupat app or site to collect it. Show it on the order screen only; it is personal, so don't send it elsewhere or log it.
+7. **Order the same again.** On a past order, an "Order again" button calls `get_order_items` and passes `items` to `review_order` (or to `create_shopping_list` when the user wants to change things first). Prices and availability are checked again in the review; products the store no longer sells show up in its `problems`.
 
 Rules that keep the user safe:
 - Never call `place_order` without the user pressing an order button after seeing the summary.

@@ -1,6 +1,6 @@
 {
   "name": "s-kaupat-mcp",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "MCP server for the S-kaupat.fi grocery store",
   "type": "module",
   "bin": {
@@ -17,6 +17,7 @@
     "test": "npm run build && node --test dist/test/*.test.js",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
     "pack:extension": "node scripts/pack-extension.mjs",
+    "export:tools": "node scripts/export-tools.mjs",
     "build:standalone": "node scripts/build-standalone.mjs"
   },
   "engines": {

@@ -22,6 +22,8 @@ export interface LiveAuthOptions {
   now?: () => number;
   /** Renew quietly in the background before the access token expires. Off in tests. */
   backgroundRenewal?: boolean;
+  /** Clears the S-kaupat session in the server's browser profile (storage and cookies). */
+  forgetSiteSession?: () => Promise<void>;
 }
 
 interface AccessToken {
@@ -80,6 +82,20 @@ export class LiveAuth implements SKaupatAuth {
   async getAccessToken(): Promise<string> {
     if (this.access && this.access.expiresAt - RENEW_MARGIN_MS > this.now()) return this.access.token;
     return this.renew();
+  }
+
+  async logout(): Promise<void> {
+    if (this.loginInProgress) throw new SKaupatError("login_in_progress", "The S-kaupat login window is open.");
+    await this.renewing?.catch(() => {});
+    await withFileLock(this.options.lockPath, () => this.options.store.clear());
+    this.close();
+    this.access = null;
+    this.displayName = null;
+    this.rejected = null;
+    // The profile still holds the site's tokens and sign-in cookies; without clearing them the next
+    // login window would pick the same account up again without asking.
+    await this.options.forgetSiteSession?.();
+    log.info("Logged out on this machine");
   }
 
   /** Stops the background renewal timer. */

@@ -128,9 +128,17 @@ const SLOT_FIELDS = "slotId areaId isClosed availability startDateTime endDateTi
 /** At most this many pickup areas are described per store, in one request. */
 const MAX_PICKUP_AREAS = 6;
 
-const PICKUP_AREAS_QUERY = `query SearchPickupDeliveryAreas($storeId: ID!, $freetext: String) {
-  searchPickupDeliveryAreas(storeId: $storeId, freetext: $freetext, pageSize: ${MAX_PICKUP_AREAS}) { areas { areaId } }
-}`;
+/**
+ * The store's pickup areas. Live 2026-10-08, a search without text found nothing for Prisma
+ * Herttoniemi, so the same search also runs with the store's name, postal code and city, one alias each.
+ */
+function pickupAreasQuery(texts: number): string {
+  const vars = Array.from({ length: texts }, (_, i) => `, $t${i}: String`).join("");
+  const field = (alias: string, text: string) =>
+    `${alias}: searchPickupDeliveryAreas(storeId: $storeId, freetext: ${text}, pageSize: ${MAX_PICKUP_AREAS}) { areas { areaId store { id } } }`;
+  const fields = [field("s", "null"), ...Array.from({ length: texts }, (_, i) => field(`s${i}`, `$t${i}`))].join(" ");
+  return `query SearchPickupDeliveryAreas($storeId: ID!${vars}) { ${fields} }`;
+}
 
 const DELIVERY_CALENDAR_QUERY = `query GetDeliveryArea($id: ID!, $startDate: String, $endDate: String) {
   deliveryArea(id: $id) { ${AREA_FIELDS} deliverySlots(startDate: $startDate, endDate: $endDate) { date deliveryTimes { ${SLOT_FIELDS} } } }
@@ -447,14 +455,22 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
 
   // Delivery and pickup (no login needed).
 
-  async getPickupAreas(storeId: string): Promise<DeliveryArea[]> {
-    const raw = await this.post("SearchPickupDeliveryAreas", PICKUP_AREAS_QUERY, { storeId, freetext: null });
+  async getPickupAreas(storeId: string, searchTexts: string[] = []): Promise<DeliveryArea[]> {
+    const texts = [...new Set(searchTexts.map((t) => t.trim()).filter(Boolean))];
+    const raw = await this.post("SearchPickupDeliveryAreas", pickupAreasQuery(texts.length), {
+      storeId,
+      ...Object.fromEntries(texts.map((t, i) => [`t${i}`, t])),
+    });
     const parsed = PickupAreasResponseSchema.safeParse(raw);
     if (!parsed.success) {
       log.warn("Unexpected pickup area response", { issues: parsed.error.issues.slice(0, 3) });
       throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected pickup area response.");
     }
-    const ids = [...new Set((parsed.data.data.searchPickupDeliveryAreas?.areas ?? []).map((a) => a.areaId))].slice(0, MAX_PICKUP_AREAS);
+    const found = Object.values(parsed.data.data).flatMap((search) => search?.areas ?? []);
+    log.info("Pickup area search", { storeId, searches: texts.length + 1, found: found.length });
+    // The store's own areas first; a text search may also find other stores' pickup points.
+    const ordered = [...found.filter((a) => a.store?.id === storeId), ...found.filter((a) => a.store?.id !== storeId)];
+    const ids = [...new Set(ordered.map((a) => a.areaId))].slice(0, MAX_PICKUP_AREAS);
     if (ids.length === 0) return [];
     const variables = Object.fromEntries(ids.map((id, i) => [`a${i}`, id]));
     const details = await this.post("GetDeliveryAreaWithNextSlot", deliveryAreasQuery(ids.length), variables);
@@ -953,9 +969,16 @@ const ApiDeliveryAreaSchema = z
   .passthrough();
 
 const PickupAreasResponseSchema = z.object({
-  data: z.object({
-    searchPickupDeliveryAreas: z.object({ areas: z.array(z.object({ areaId: z.string() }).passthrough()).nullish() }).nullish(),
-  }),
+  data: z.record(
+    z.string(),
+    z
+      .object({
+        areas: z
+          .array(z.object({ areaId: z.string(), store: z.object({ id: z.string().nullish() }).passthrough().nullish() }).passthrough())
+          .nullish(),
+      })
+      .nullish(),
+  ),
 });
 
 const DeliveryAreasResponseSchema = z.object({ data: z.record(z.string(), ApiDeliveryAreaSchema.nullable()) });

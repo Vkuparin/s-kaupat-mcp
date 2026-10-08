@@ -261,8 +261,11 @@ test("the HTTP client describes a store's pickup areas in one extra request", as
       sent,
     ),
   });
-  const areas = await client.getPickupAreas("726109200");
+  const areas = await client.getPickupAreas("726109200", ["Prisma Herttoniemi", " ", "00930"]);
   assert.equal(sent.length, 2);
+  // The same search without text and with each of the store's texts, in one request.
+  assert.deepEqual(sent[0].variables, { storeId: "726109200", t0: "Prisma Herttoniemi", t1: "00930" });
+  assert.match(sent[0].query, /s: searchPickupDeliveryAreas\(storeId: \$storeId, freetext: null.*s1: searchPickupDeliveryAreas\(storeId: \$storeId, freetext: \$t1/);
   assert.deepEqual(sent[1].variables, { a0: "4f1c-area", a1: "lokero" });
   assert.match(sent[1].query, /a1: deliveryArea\(id: \$a1\)/);
   assert.deepEqual(

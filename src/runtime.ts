@@ -16,7 +16,7 @@ import type { DeliveryApi } from "./delivery/types.js";
 import type { ShoppingListApi } from "./lists/types.js";
 import { log, setDebugLogging } from "./log.js";
 import { FileStoreSelection, type StoreSelection } from "./selection.js";
-import { createServer } from "./server.js";
+import { createServer, type SiteWindow } from "./server.js";
 
 /**
  * The parts of a running server that outlive one MCP connection: the S-kaupat
@@ -35,9 +35,12 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   setDebugLogging(config.debug);
   const selection: StoreSelection = new FileStoreSelection(config.settingsFile);
   const { client, auth, browser } = config.mode === "demo" ? demoParts(config) : liveParts(config);
+  const site: SiteWindow | undefined = browser
+    ? { open: (url) => browser.openForUser(url), storage: () => browser.siteStorage() }
+    : undefined;
   return {
     config,
-    createMcpServer: () => createServer(client, auth, { selection, lists: client, delivery: client, mode: config.mode }),
+    createMcpServer: () => createServer(client, auth, { selection, lists: client, delivery: client, site, mode: config.mode }),
     close: async () => {
       await browser?.close();
     },

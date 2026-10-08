@@ -63,8 +63,11 @@ export interface DeliveryCalendar {
 }
 
 export interface DeliveryApi {
-  /** Pickup areas of one store (its own pickup counter, lockers, pickup points). */
-  getPickupAreas(storeId: string): Promise<DeliveryArea[]>;
+  /**
+   * Pickup areas of one store (its own pickup counter, lockers, pickup points). `searchTexts`
+   * (the store's name, postal code, city) widen S-kaupat's search, which may need text.
+   */
+  getPickupAreas(storeId: string, searchTexts?: string[]): Promise<DeliveryArea[]>;
   /** One area with its slots from startDate to endDate (YYYY-MM-DD, inclusive); null when unknown. */
   getDeliveryCalendar(areaId: string, startDate: string, endDate: string): Promise<DeliveryCalendar | null>;
 }

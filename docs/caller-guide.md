@@ -93,6 +93,8 @@ The time is **not reserved** on S-kaupat. The site keeps its own choice in the b
 
 > Valitse sivulla "Valitse toimitustapa": Nouto, Prisma Herttoniemi, pe 9.10. klo 16:00–18:00.
 
+**Finish in the server's own window.** A "Go to checkout" button can call `open_site`: it opens S-kaupat in the server's own browser window, where the user is already logged in, so they don't need to log in again in their own browser. Show the returned `nextStep` next to the button. `get_site_choice` tells whether the site has the chosen time (`matchesSelection`). Pre-filling the time in that window is planned. In demo mode both answer `unsupported`.
+
 **Check the basket for that day.** `check_basket` with a `listId` (or `items`) asks S-kaupat whether each product can be ordered for the chosen time. Show problems next to the product, using `label` (S-kaupat's own words, e.g. "Tilapäisesti loppu") when there is one. `checkedFor` is `null` when no time is chosen; then the check is for the store in general.
 
 ## 6. Errors

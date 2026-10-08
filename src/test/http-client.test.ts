@@ -176,6 +176,28 @@ test("getStores batches IDs into one request and maps opening hours", async () =
   assert.equal(stores.get("517609418")?.openingHours[0]?.status, "open_24h");
   assert.equal(stores.get("517609418")?.chain, "PRISMA");
   assert.equal(stores.has("999"), false);
+  assert.match(bodies[0].query, /location \{ address/);
+});
+
+test("getStores brings the store's address, so a store chosen by ID has one", async () => {
+  const client = new HttpSKaupatClient({
+    fetchImpl: fakeFetch({
+      data: {
+        s0: {
+          id: "726109200",
+          name: "Prisma Herttoniemi",
+          brand: "prisma",
+          domains: ["S_KAUPAT"],
+          location: { address: { street: { default: "Linnanrakentajantie 2" }, postcode: "00880", postcodeName: { default: "Helsinki" } }, coordinates: { lat: "60.19471", lon: "25.034922" } },
+          weeklyOpeningHours: [],
+        },
+      },
+    }),
+  });
+  const store = (await client.getStores(["726109200"])).get("726109200")!.store!;
+  assert.equal(store.postalCode, "00880");
+  assert.equal(store.city, "Helsinki");
+  assert.deepEqual(store.coordinates, { lat: 60.19471, lon: 25.034922 });
 });
 
 test("S-kaupat product errors become product_unavailable", async () => {

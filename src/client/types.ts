@@ -54,6 +54,8 @@ export interface StoreDetails {
   id: string;
   name: string;
   chain: string | null;
+  /** The store with its address, when S-kaupat sent it. */
+  store?: Store;
   /** Upcoming days as S-kaupat reports them (about three weeks), oldest first. */
   openingHours: OpeningDay[];
 }

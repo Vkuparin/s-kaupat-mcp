@@ -14,7 +14,7 @@ import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.
 import { readSiteChoice } from "./browser/site-state.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.6.1";
+export const SERVER_VERSION = "0.6.2";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -176,7 +176,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const details = (await client.getStores([storeId])).get(storeId);
         if (!details) throw storeNotFound(storeId);
         const store: SavedStore = {
-          ...(seenStores.get(storeId) ?? storeFromDetails(details)),
+          ...(details.store ?? seenStores.get(storeId) ?? storeFromDetails(details)),
           selectedAt: now().toISOString(),
         };
         selection.set(store);
@@ -496,7 +496,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const lists = requireLists();
         const list = await withToken((t) => lists.createList(t, name, store));
         // The list exists now: whatever happens with the products, the caller gets the list back.
-        const result = await addItemsToList({ client, lists, withToken, storeId: store, list, items, newList: true }).catch(
+        const delivery = basketDelivery(currentDelivery(store));
+        const result = await addItemsToList({ client, lists, withToken, storeId: store, list, items, newList: true, delivery }).catch(
           (err): ListWriteResult => {
             const e = toSKaupatError(err);
             return {
@@ -537,7 +538,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const lists = requireLists();
         const list = await getListOrThrow(listId, store);
         return listWriteView(
-          await addItemsToList({ client, lists, withToken, storeId: store, list, items }),
+          await addItemsToList({ client, lists, withToken, storeId: store, list, items, delivery: basketDelivery(currentDelivery(store)) }),
           storeNameFor(store),
           currentDelivery(store),
         );
@@ -760,7 +761,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
             : await client.checkBasket(
                 store,
                 rows.map((r) => ({ id: r.productId, quantity: r.quantity })),
-                delivery ? { date: delivery.slot.date, slotId: delivery.slot.slotId, areaId: delivery.area.areaId } : undefined,
+                basketDelivery(delivery),
               );
         const results = rows.map((r) => {
           const check = checks.get(r.productId);
@@ -834,6 +835,10 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
   );
 
   return server;
+}
+
+function basketDelivery(d: SavedDelivery | null): { date: string; slotId: string; areaId: string } | undefined {
+  return d ? { date: d.slot.date, slotId: d.slot.slotId, areaId: d.area.areaId } : undefined;
 }
 
 function deliveryAreaNotFound(areaId: string): SKaupatError {
@@ -979,6 +984,7 @@ async function tryGetStores(client: SKaupatClient, ids: string[]): Promise<Map<s
 }
 
 function storeFromDetails(d: StoreDetails): Store {
+  if (d.store) return d.store;
   return {
     id: d.id,
     name: d.name,

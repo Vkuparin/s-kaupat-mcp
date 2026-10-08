@@ -57,7 +57,9 @@ const STORE_SEARCH_QUERY = `query RemoteStoreSearch($query: String, $brand: Stor
   }
 }`;
 
-const STORE_DETAIL_FIELDS = "id name brand weeklyOpeningHours { openingTimes { date day mode ranges { open close } } }";
+/** The same Store type as in searchStores, so the address comes with it (select_store may run without a search). */
+const STORE_DETAIL_FIELDS =
+  "id name brand domains location { address { street { default } postcode postcodeName { default } } coordinates { lat lon } } weeklyOpeningHours { openingTimes { date day mode ranges { open close } } }";
 
 /** Product fields shared by search, category browsing and lookups by EAN (all seen in docs/samples). */
 const PRODUCT_FIELDS =
@@ -306,6 +308,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
         id: s.id,
         name: s.name,
         chain: chainCode(s.brand),
+        ...(s.location ? { store: mapStore(s) } : {}),
         openingHours: (s.weeklyOpeningHours ?? []).flatMap((w) => w.openingTimes.map(toOpeningDay)),
       });
     });
@@ -737,11 +740,8 @@ const StoreSearchResponseSchema = z.object({
   }),
 });
 
-const ApiStoreDetailSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    brand: z.string().nullish(),
+const ApiStoreDetailSchema = ApiStoreSchema
+  .extend({
     weeklyOpeningHours: z
       .array(
         z.object({
@@ -955,7 +955,8 @@ const ApiDeliveryAreaSchema = z
     description: z.string().nullish(),
     deliveryMethod: z.string().nullish(),
     isFastTrack: z.boolean().nullish(),
-    alcoholSellingAllowed: z.boolean().nullish(),
+    // A string such as "ALLOWED" live (2026-10-08), not the boolean its name suggests.
+    alcoholSellingAllowed: z.union([z.boolean(), z.string()]).nullish(),
     store: z.object({ id: z.string().nullish(), name: z.string().nullish() }).passthrough().nullish(),
     address: z
       .object({ street: z.string().nullish(), postalCode: z.string().nullish(), city: z.string().nullish() })
@@ -1004,7 +1005,7 @@ function mapSlot(t: z.infer<typeof ApiSlotSchema>, areaId: string, now: Date): D
 }
 
 function mapDeliveryArea(a: z.infer<typeof ApiDeliveryAreaSchema>, now: Date): DeliveryArea {
-  const address = a.address ? { street: a.address.street ?? null, postalCode: a.address.postalCode ?? null, city: a.address.city ?? null } : null;
+  const address = a.address ? { street: trimmed(a.address.street), postalCode: trimmed(a.address.postalCode), city: trimmed(a.address.city) } : null;
   return {
     areaId: a.areaId,
     name: a.name ?? null,
@@ -1014,7 +1015,20 @@ function mapDeliveryArea(a: z.infer<typeof ApiDeliveryAreaSchema>, now: Date): D
     price: euros(a.price),
     description: a.description?.trim() || null,
     address: address && (address.street || address.postalCode || address.city) ? address : null,
-    alcoholAllowed: a.alcoholSellingAllowed ?? null,
+    alcoholAllowed: alcoholAllowed(a.alcoholSellingAllowed),
     nextSlot: a.nextDeliverySlot ? mapSlot(a.nextDeliverySlot, a.areaId, now) : null,
   };
+}
+
+function alcoholAllowed(raw: boolean | string | null | undefined): boolean | null {
+  if (typeof raw === "boolean") return raw;
+  const value = raw?.toUpperCase() ?? "";
+  if (/NOT|DIS|DENIED|FORBIDDEN/.test(value)) return false;
+  if (/ALLOWED|YES|TRUE/.test(value)) return true;
+  return null;
+}
+
+/** S-kaupat's texts sometimes carry stray spaces (" Insinöörinkatu 2" live). */
+function trimmed(text: string | null | undefined): string | null {
+  return text?.trim() || null;
 }

@@ -1,3 +1,5 @@
+import { closeSync, existsSync, openSync } from "node:fs";
+import { join } from "node:path";
 import type { BrowserContext } from "playwright-core";
 import { type ErrorCode, SKaupatError } from "../errors.js";
 
@@ -48,8 +50,9 @@ export async function launchProfile(options: LaunchOptions): Promise<BrowserCont
         args: browserArgs(options),
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message.split("\n")[0]! : String(err);
-      if (/already in use|ProcessSingleton|SingletonLock/i.test(message)) {
+      const full = err instanceof Error ? err.message : String(err);
+      const message = full.split("\n")[0]!;
+      if (/already in use|ProcessSingleton|SingletonLock/i.test(full) || profileInUse(options.profileDir)) {
         throw new SKaupatError(options.busyCode, "The S-kaupat browser profile is open in another process.");
       }
       errors.push(`${candidate.channel ?? candidate.executablePath}: ${message}`);
@@ -78,4 +81,20 @@ export function browserArgs({ profileDir, headless, minimized }: LaunchOptions):
     ...(minimized && !headless ? ["--start-minimized"] : []),
     "about:blank",
   ];
+}
+
+/**
+ * Whether another browser has the profile open. On Windows a running Edge or Chrome keeps the
+ * profile's "lockfile" open without sharing, so opening it fails; the second browser then just
+ * hands over to the first and exits, with no "in use" message (seen live 2026-10-08).
+ */
+export function profileInUse(profileDir: string): boolean {
+  const lockfile = join(profileDir, "lockfile");
+  if (process.platform !== "win32" || !existsSync(lockfile)) return false;
+  try {
+    closeSync(openSync(lockfile, "r+"));
+    return false;
+  } catch (err) {
+    return ["EBUSY", "EPERM", "EACCES"].includes((err as NodeJS.ErrnoException).code ?? "");
+  }
 }

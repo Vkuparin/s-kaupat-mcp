@@ -32,3 +32,23 @@ test("reads the site's choice and describes its storage without values", () => {
   assert.deepEqual((storage[0]!.shape as any).ROOT_QUERY.authenticationTokens, "<private>");
   assert.deepEqual((storage[0]!.shape as any)["ShoppingList:x"], { name: "string", items: [{ ean: "string", name: "string" }, "…1"] });
 });
+
+test("the site's choice is read from its storage keys as seen live", () => {
+  const { choice } = readSiteChoice([
+    ["store-storage", JSON.stringify({ state: { storeId: "726109200", selectedBrand: "prisma", deliveryStore: { id: "726109200", areaId: "a-1" } }, version: 0 })],
+    [
+      "delivery-storage",
+      JSON.stringify({
+        state: {
+          selectedAreaId: "a-1",
+          deliveryDetailsInfo: { deliveryDate: "2026-10-08", deliveryMethod: "PICKUP", deliverySlotId: "2026-10-08:s-1", deliveryTime: "12:00" },
+          deliveryAddress: { street: "Kotikatu 1" },
+        },
+      }),
+    ],
+  ]);
+  assert.equal(choice.storeId, "726109200");
+  assert.equal(choice.selectedAreaId, "a-1");
+  assert.equal(choice.deliverySlotId, "2026-10-08:s-1");
+  assert.equal(choice.deliveryMethod, "PICKUP");
+});

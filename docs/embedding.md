@@ -6,7 +6,7 @@ The server is a plain [MCP](https://modelcontextprotocol.io) server. It does not
 
 | Package | What it is | Use it when |
 |---|---|---|
-| `s-kaupat-mcp.exe` | The server with Node.js inside, one file (about 80 MB) | Your app is not a Node app, or you don't want to ship Node |
+| `s-kaupat-mcp.exe` | The server with Node.js inside, one file (about 110 MB) | Your app is not a Node app, or you don't want to ship Node |
 | `s-kaupat-mcp.cjs` | The server as one JavaScript file (about 5 MB) | Your app ships Node.js 20 or newer: run `node s-kaupat-mcp.cjs` |
 | npm package (`s-kaupat-mcp-<version>.tgz`) | Command line plus a library API | Your app is a Node app and wants the server in its own process |
 | `s-kaupat-<version>.mcpb` | Claude Desktop extension | Installing for Claude Desktop |

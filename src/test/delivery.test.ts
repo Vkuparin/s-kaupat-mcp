@@ -173,7 +173,7 @@ const apiArea = {
   description: " ",
   deliveryMethod: "PICKUP",
   isFastTrack: false,
-  alcoholSellingAllowed: true,
+  alcoholSellingAllowed: "ALLOWED", // as seen live
   store: { id: "726109200", name: "Prisma Herttoniemi" },
   address: { street: "Kauppakartanonkatu 7", postalCode: "00930", city: "Helsinki" },
 };
@@ -228,6 +228,7 @@ test("the HTTP client maps S-kaupat's delivery areas and slots", async () => {
   assert.equal(calendar!.area.method, "pickup");
   assert.equal(calendar!.area.price, 3.9);
   assert.equal(calendar!.area.description, null);
+  assert.equal(calendar!.area.alcoholAllowed, true);
   assert.deepEqual(
     calendar!.slots.map((s) => [s.slotId, s.status, s.price, s.date]),
     [

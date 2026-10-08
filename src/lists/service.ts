@@ -1,4 +1,4 @@
-import type { BasketCheck, ListableProduct, SKaupatClient } from "../client/types.js";
+import type { BasketCheck, BasketDelivery, ListableProduct, SKaupatClient } from "../client/types.js";
 import { type ErrorCode, SKaupatError, toSKaupatError, USER_MESSAGES, type UserMessage } from "../errors.js";
 import { log } from "../log.js";
 import type { ShoppingList, ShoppingListApi, ShoppingListItem } from "./types.js";
@@ -62,6 +62,8 @@ export async function addItemsToList(options: {
   items: RequestedItem[];
   /** The list was created for this call: report a failed first write per item instead of throwing, so the caller still gets the new list. */
   newList?: boolean;
+  /** The chosen pickup or delivery time, so out-of-stock warnings are for that day. */
+  delivery?: BasketDelivery;
 }): Promise<ListWriteResult> {
   const { client, lists, withToken, storeId } = options;
   let list = options.list;
@@ -70,7 +72,7 @@ export async function addItemsToList(options: {
 
   const ids = items.map((i) => i.productId);
   const listable = await client.getListableProducts(storeId, ids);
-  const checks = await tryCheckBasket(client, storeId, items);
+  const checks = await tryCheckBasket(client, storeId, items, options.delivery);
 
   const results: ItemOutcome[] = [];
   const wasOnList = new Set(list.items.map((i) => i.productId));
@@ -173,9 +175,10 @@ async function tryCheckBasket(
   client: SKaupatClient,
   storeId: string,
   items: RequestedItem[],
+  delivery: BasketDelivery | undefined,
 ): Promise<Map<string, BasketCheck>> {
   try {
-    return await client.checkBasket(storeId, items.map((i) => ({ id: i.productId, quantity: i.quantity })));
+    return await client.checkBasket(storeId, items.map((i) => ({ id: i.productId, quantity: i.quantity })), delivery);
   } catch (err) {
     // The check only adds warnings; writing the list must not depend on it.
     log.warn("Cart check failed; writing the list without it", { code: toSKaupatError(err).code });

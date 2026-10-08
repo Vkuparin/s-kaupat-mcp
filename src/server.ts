@@ -82,7 +82,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
           log.warn("Could not read the login status", { code: toSKaupatError(err).code });
           login = { status: "unknown", displayName: null };
         }
-        const loggedIn = login.status === "logged_in";
+        // "unknown" counts as logged in: a list call will say if it is not, and the app shouldn't nag.
+        const loggedIn = login.status === "logged_in" || login.status === "unknown";
         return {
           mode: options.mode ?? "live",
           store: store ? { id: store.id, name: store.name, chainName: store.chainName } : null,

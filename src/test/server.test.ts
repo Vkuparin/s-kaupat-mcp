@@ -331,6 +331,7 @@ test("get_setup_status still answers when the login check fails", async () => {
   const { isError, data } = await call(await connect(undefined, { auth }), "get_setup_status", {});
   assert.equal(isError, false);
   assert.equal(data.login.status, "unknown");
+  assert.equal(data.nextStep, "choose_store");
 });
 
 test("every error tells the app what to offer next", async () => {

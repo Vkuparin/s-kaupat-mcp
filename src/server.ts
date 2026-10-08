@@ -11,9 +11,10 @@ import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./se
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
 import { deliveryInstruction, isExpired } from "./delivery/format.js";
 import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.js";
+import { readSiteChoice } from "./browser/site-state.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.6.0";
+export const SERVER_VERSION = "0.6.1";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -35,9 +36,20 @@ export interface ServerOptions {
   lists?: ShoppingListApi;
   /** Delivery and pickup times. Without it the delivery tools answer unsupported. */
   delivery?: DeliveryApi;
+  /** The server's own S-kaupat window, for finishing on the site. Live mode with the browser transport only. */
+  site?: SiteWindow;
   /** demo: sample data, no S-kaupat account (the extension's Demo mode). Reported by get_setup_status. */
   mode?: "live" | "demo";
 }
+
+export interface SiteWindow {
+  /** Opens the URL in a visible window of the server's own (logged-in) browser. */
+  open(url: string): Promise<void>;
+  /** The site's localStorage in that browser, and the path the user's window is on. */
+  storage(): Promise<{ entries: [string, string][]; userPagePath: string | null }>;
+}
+
+const SITE_URL = "https://www.s-kaupat.fi/";
 
 /** Read by MCP clients that pass server instructions to the model. */
 export const SERVER_INSTRUCTIONS = [
@@ -47,7 +59,7 @@ export const SERVER_INSTRUCTIONS = [
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
   "5. Optionally let the user pick a pickup time: get_delivery_options, then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots.",
-  "6. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the site asks for the store and pickup or delivery; nextStep says exactly what to pick), check out. These tools never place orders, reserve times or pay.",
+  "6. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the site asks for the store and pickup or delivery; nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in. These tools never place orders, reserve times or pay.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
 
@@ -602,7 +614,9 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     async ({ storeId }) =>
       run("get_delivery_options", async () => {
         const store = resolveStoreId(storeId);
-        const options = await requireDelivery().getPickupAreas(store);
+        const known = selection.get()?.id === store ? selection.get() : seenStores.get(store);
+        const name = known?.name ?? (await client.getStores([store])).get(store)?.name ?? null;
+        const options = await requireDelivery().getPickupAreas(store, [name, known?.postalCode, known?.city].filter((t): t is string => !!t));
         return {
           storeId: store,
           storeName: storeNameFor(store),
@@ -760,6 +774,61 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
             ok: results.filter((r) => r.status === "ok").length,
             problems: results.filter((r) => r.status !== "ok").length,
           },
+        };
+      }),
+  );
+
+  const requireSite = (): SiteWindow => {
+    if (!options.site) throw new SKaupatError("unsupported", "The S-kaupat window is only available in live mode.");
+    return options.site;
+  };
+
+  server.registerTool(
+    "open_site",
+    {
+      title: "Open S-kaupat to finish the order",
+      description:
+        "Opens S-kaupat in a window of this server's own browser, where the user is already logged in, so they " +
+        "can open their list, press 'Lisää kaikki ostoskoriin' and check out there. Call it when the user asks to " +
+        "finish or check out, for example from a 'Go to checkout' button. Returns what to tell the user, " +
+        "including the pickup time to pick on the site when one was chosen. Never places an order.",
+      inputSchema: {},
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async () =>
+      run("open_site", async () => {
+        await requireSite().open(SITE_URL);
+        const store = selection.get();
+        const delivery = store ? currentDelivery(store.id) : null;
+        return { opened: true, nextStep: listNextStep(store?.name ?? null, delivery) };
+      }),
+  );
+
+  server.registerTool(
+    "get_site_choice",
+    {
+      title: "Read the S-kaupat site's own choice",
+      description:
+        "What the S-kaupat site in this server's own browser has as its store and pickup or delivery choice " +
+        "(the site keeps it in the browser), and whether that matches the time chosen with select_delivery. " +
+        "Fields the site has not set are null. includeStorageShape adds the site's storage layout (key names and " +
+        "value types only, never values) for diagnosing changes on the site.",
+      inputSchema: {
+        includeStorageShape: z.boolean().default(false).describe("Add the storage layout, for developers."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ includeStorageShape }) =>
+      run("get_site_choice", async () => {
+        const { entries, userPagePath } = await requireSite().storage();
+        const { choice, storage } = readSiteChoice(entries);
+        const saved = selection.getDelivery();
+        const siteSlot = choice.deliverySlotId;
+        return {
+          siteChoice: choice,
+          matchesSelection: saved && siteSlot ? siteSlot === saved.slot.slotId : null,
+          openWindowPath: userPagePath,
+          ...(includeStorageShape ? { storage } : {}),
         };
       }),
   );

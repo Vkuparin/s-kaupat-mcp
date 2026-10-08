@@ -257,3 +257,46 @@ test("a profile still held by a closing window is retried once", async () => {
   assert.equal(attempts, 2);
   await session.close();
 });
+
+test("the user's window opens next to the API tab, keeps the browser open and shares the site's storage", { skip }, async () => {
+  const site = await listen((_req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end("<p>S-kaupat</p>");
+  });
+  const profileDir = await mkdtemp(join(tmpdir(), "skaupat-browser-"));
+  let context!: BrowserContext;
+  const session = new BrowserSession({
+    profileDir,
+    startUrl: site.url,
+    idleMs: 100,
+    launch: async () => {
+      context = await launchProfile({ profileDir, headless: true, executablePath: chromium, unavailableCode: "browser_unavailable", busyCode: "browser_busy" });
+      return context;
+    },
+  });
+  try {
+    await session.openForUser(`${site.url}ostoslistat`);
+    assert.equal(context.pages().length, 2, "the API tab and the user's window");
+    const user = context.pages().find((p) => p.url().endsWith("/ostoslistat"))!;
+    assert.ok(user);
+    await user.evaluate(() =>
+      localStorage.setItem("apollo", JSON.stringify({ ROOT_QUERY: { selectedStoreId: "726109200", authenticationTokens: { refreshToken: "secret" } } })),
+    );
+    const storage = await session.siteStorage();
+    assert.equal(storage.userPagePath, "/ostoslistat");
+    assert.deepEqual(storage.entries, [["apollo", '{"ROOT_QUERY":{"selectedStoreId":"726109200","authenticationTokens":{"refreshToken":"secret"}}}']]);
+
+    // A second call reuses the window.
+    await session.openForUser(`${site.url}kassa`);
+    assert.equal(context.pages().length, 2);
+
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(context.pages().length, 2, "the browser stays open while the user's window is");
+    await user.close();
+    await new Promise((r) => setTimeout(r, 250));
+    assert.equal(context.pages().length, 0, "then it closes when idle");
+  } finally {
+    await session.close();
+    site.close();
+  }
+});

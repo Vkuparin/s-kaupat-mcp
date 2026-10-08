@@ -48,6 +48,11 @@ Read-only against S-kaupat, except the list in the last step.
 - [ ] `check_basket` on a list answers per product.
 - [ ] On the site, picking what `siteInstruction` says and pressing "Lisää kaikki ostoskoriin" puts the list in the cart.
 
+## 7c. Finishing in the server's window (0.6.1)
+- [ ] `get_delivery_options` lists Prisma Herttoniemi's pickup options (0.6.0 found none; 0.6.1 also searches with the store's name, postal code and city).
+- [ ] `open_site` opens one normal S-kaupat window, logged in; the minimised API window stays as it was.
+- [ ] In that window, pick pickup and a time on the site, then `get_site_choice` with `includeStorageShape: true` shows the store, area and slot the site saved, and no login values.
+
 ## 8. Two apps at once
 - [ ] With two apps running the server, the second one gets `browser_busy` while the first one's window is open, and works after it closes.
 

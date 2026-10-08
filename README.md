@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.6.0)**. Catalogue, store-selection, login, shopping list and pickup-time tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.6.1)**. Catalogue, store-selection, login, shopping list and pickup-time tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -37,6 +37,8 @@ All of these are built by the Release workflow in GitHub Actions.
 | `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
 | `clear_delivery` | none | Forgets the chosen time |
 | `check_basket` | `listId` or `items[]`, `storeId` (optional) | Per product, whether it can be ordered for the chosen time: `ok`, `unavailable` (with S-kaupat's label), `not_in_store`, `not_found` or `unknown` |
+| `open_site` | none | Opens S-kaupat in the server's own window, where the user is already logged in, to finish the order there; returns what to tell the user |
+| `get_site_choice` | `includeStorageShape` | The store and pickup choice the site itself has in that window, and whether it matches `select_delivery` |
 
 Prices are per store. Product tools use the store chosen with `select_store` unless a `storeId` is passed, and fail with `store_not_selected` when there is neither. Fields S-kaupat does not report come back as `null` (or `"unknown"`) rather than guessed.
 

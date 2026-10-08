@@ -12,6 +12,9 @@ import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stor
 import { deliveryInstruction, isExpired, localTime } from "./delivery/format.js";
 import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.js";
 import { prefillEntries, readSiteChoice, type SitePrefill } from "./browser/site-state.js";
+import { registerCheckoutTools } from "./checkout/tools.js";
+import type { CheckoutApi } from "./checkout/types.js";
+import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 
 export const SERVER_NAME = "s-kaupat";
 export const SERVER_VERSION = "0.8.0";
@@ -40,6 +43,12 @@ export interface ServerOptions {
   site?: SiteWindow;
   /** demo: sample data, no S-kaupat account (the extension's Demo mode). Reported by get_setup_status. */
   mode?: "live" | "demo";
+  /** Checkout calls. Without it the checkout tools are not offered. */
+  checkout?: CheckoutApi;
+  /** Orders placed through this server and their access tokens. Defaults to memory only. */
+  orders?: OrderStore;
+  /** false turns place_order off. Default true. */
+  ordering?: boolean;
 }
 
 export interface SiteWindow {
@@ -952,6 +961,26 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       }),
   );
 
+  if (options.checkout) {
+    registerCheckoutTools(server, {
+      client,
+      auth,
+      checkout: options.checkout,
+      orders: options.orders ?? new MemoryOrderStore(),
+      selection,
+      lists: options.lists,
+      withToken,
+      resolveStoreId,
+      currentDelivery,
+      deliveryView: (d) => deliveryView(d, now()),
+      storeName: storeNameFor,
+      openWindow: options.site ? (url) => options.site!.open(url) : undefined,
+      orderingEnabled: options.ordering ?? true,
+      now,
+      run,
+    });
+  }
+
   return server;
 }
 
@@ -1147,7 +1176,7 @@ function storeView(store: SavedStore, details: StoreDetails | undefined, now: Da
   };
 }
 
-async function run(tool: string, fn: () => Promise<object>): Promise<CallToolResult> {
+export async function run(tool: string, fn: () => Promise<object>): Promise<CallToolResult> {
   try {
     const result = { schemaVersion: SCHEMA_VERSION, ...(await fn()) };
     return {

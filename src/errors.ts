@@ -24,6 +24,15 @@ export type ErrorCode =
   | "conflict"
   | "unsupported"
   | "write_uncertain"
+  | "order_not_ready"
+  | "confirmation_required"
+  | "ordering_not_possible"
+  | "reservation_expired"
+  | "unpaid_orders"
+  | "payment_failed"
+  | "order_not_found"
+  | "order_uncertain"
+  | "orders_disabled"
   | "upstream_error";
 
 export interface UserMessage {
@@ -101,6 +110,42 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
     fi: "Muutoksen onnistumista ei voitu varmistaa. Tarkista tilanne S-kaupat-sivulta.",
     en: "We could not confirm the change went through. Please check on the S-kaupat site.",
   },
+  order_not_ready: {
+    fi: "Tilauksesta puuttuu vielä tietoja. Täydennä ne ja yritä uudelleen.",
+    en: "Some order details are still missing. Please fill them in and try again.",
+  },
+  confirmation_required: {
+    fi: "Tilaus muuttui yhteenvedon jälkeen. Tarkista yhteenveto ja vahvista uudelleen.",
+    en: "The order changed after the summary. Please check the summary and confirm again.",
+  },
+  ordering_not_possible: {
+    fi: "Tilausta ei voi tehdä näillä tuotteilla tälle ajalle. Tarkista tuotteet.",
+    en: "This order can't be placed for that time with these products. Please check the products.",
+  },
+  reservation_expired: {
+    fi: "Toimitusajan varaus vanheni. Valitse aika uudelleen.",
+    en: "The time reservation expired. Please choose the time again.",
+  },
+  unpaid_orders: {
+    fi: "Tililläsi on maksamaton tilaus. Maksa se ensin, niin voit tilata uudelleen.",
+    en: "Your account has an unpaid order. Please pay it first, then you can order again.",
+  },
+  payment_failed: {
+    fi: "Maksu ei onnistunut. Yritä uudelleen tai valitse toinen maksutapa.",
+    en: "The payment did not go through. Please try again or choose another payment method.",
+  },
+  order_not_found: {
+    fi: "Tilausta ei löytynyt.",
+    en: "That order could not be found.",
+  },
+  order_uncertain: {
+    fi: "Tilauksen onnistumista ei voitu varmistaa. Tarkista tilaukset ennen kuin yrität uudelleen.",
+    en: "We could not confirm whether the order went through. Please check your orders before trying again.",
+  },
+  orders_disabled: {
+    fi: "Tilaaminen on poistettu käytöstä tässä sovelluksessa.",
+    en: "Ordering is turned off in this app.",
+  },
   upstream_error: {
     fi: "S-kaupassa tapahtui virhe. Yritä uudelleen.",
     en: "Something went wrong at S-kaupat. Please try again.",
@@ -120,6 +165,9 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
  * - choose_delivery_time: show the times again (get_delivery_slots) so the user picks another.
  * - choose_other_product: offer another product.
  * - install_browser: the PC needs Microsoft Edge or Google Chrome.
+ * - review_order: show the order summary again (review_order) and let the user confirm it.
+ * - pay: show the payment step again (pay_order), or another payment method.
+ * - check_orders: show the user's orders (get_order) before doing anything else.
  * - none: nothing the user can do now (a bug in the request, or a missing feature).
  */
 export type ErrorAction =
@@ -133,6 +181,9 @@ export type ErrorAction =
   | "refresh_lists"
   | "choose_other_product"
   | "install_browser"
+  | "review_order"
+  | "pay"
+  | "check_orders"
   | "none";
 
 export const ERROR_ACTIONS: Record<ErrorCode, { action: ErrorAction; retryable: boolean }> = {
@@ -156,6 +207,15 @@ export const ERROR_ACTIONS: Record<ErrorCode, { action: ErrorAction; retryable: 
   conflict: { action: "retry", retryable: true },
   unsupported: { action: "none", retryable: false },
   write_uncertain: { action: "check_list", retryable: false },
+  order_not_ready: { action: "review_order", retryable: false },
+  confirmation_required: { action: "review_order", retryable: false },
+  ordering_not_possible: { action: "check_list", retryable: false },
+  reservation_expired: { action: "choose_delivery_time", retryable: false },
+  unpaid_orders: { action: "check_orders", retryable: false },
+  payment_failed: { action: "pay", retryable: true },
+  order_not_found: { action: "check_orders", retryable: false },
+  order_uncertain: { action: "check_orders", retryable: false },
+  orders_disabled: { action: "none", retryable: false },
   upstream_error: { action: "retry", retryable: true },
 };
 

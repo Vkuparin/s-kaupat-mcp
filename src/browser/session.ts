@@ -126,6 +126,17 @@ export class BrowserSession {
     return { entries, userPagePath: userUrl ? new URL(userUrl).pathname : null };
   }
 
+  /**
+   * Writes entries into the site's localStorage in the server's profile (used to pre-fill the
+   * user's pickup choice before its window opens). Only the given keys change.
+   */
+  async writeSiteStorage(entries: [string, string][]): Promise<void> {
+    const page = (await this.apiPage()) as Page;
+    await page.evaluate((items) => {
+      for (const [key, value] of items) window.localStorage.setItem(key, value);
+    }, entries);
+  }
+
   async close(): Promise<void> {
     if (this.idleTimer) clearTimeout(this.idleTimer);
     this.idleTimer = null;

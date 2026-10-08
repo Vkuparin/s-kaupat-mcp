@@ -65,6 +65,49 @@ export interface DeliveryCalendar {
   slots: DeliverySlot[];
 }
 
+/** One match of an address search (the site's "Toimitusvaihtoehdot" search box). */
+export interface AddressSuggestion {
+  /** S-kaupat's id for the match; only meaningful together with the other fields. */
+  addressId: string;
+  /** What the site shows, e.g. "Kauppakartanonkatu 7, Helsinki". */
+  title: string;
+  street: string | null;
+  postalCode: string | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** S-kaupat's kind of match (a street address or a pickup place), as it reports it. */
+  kind: string | null;
+}
+
+/** Where to look for delivery: a postal code and coordinates, as an address search returns them. */
+export interface DeliveryLocation {
+  postalCode: string;
+  latitude: number;
+  longitude: number;
+}
+
+/** Whether one way of getting the order (pickup, home delivery, express) is offered at a location. */
+export interface DeliveryMethodAvailability {
+  method: DeliveryMethod;
+  /** null when S-kaupat reported a status this server does not know. */
+  available: boolean | null;
+  /** S-kaupat's own name, in Finnish ("Nouto", "Kotiinkuljetus", "Pikatoimitus"). */
+  name: string | null;
+  /** S-kaupat's own short summary in Finnish, e.g. "8,90–14,90 €, huomenna". */
+  summary: string | null;
+  /** S-kaupat's method codes under it, e.g. PICKUP_PLANNED, HOME_DELIVERY_ONE_HOUR. */
+  variants: string[];
+}
+
+/** A pickup place near a location, with its times on one day. */
+export interface NearbyPickup {
+  area: DeliveryArea;
+  /** Distance from the location as S-kaupat reports it (unit not confirmed yet). */
+  distance: number | null;
+  slots: DeliverySlot[];
+}
+
 export interface DeliveryApi {
   /**
    * Pickup areas of one store (its own pickup counter, lockers, pickup points). `searchTexts`
@@ -73,6 +116,12 @@ export interface DeliveryApi {
   getPickupAreas(storeId: string, searchTexts?: string[]): Promise<DeliveryArea[]>;
   /** One area with its slots from startDate to endDate (YYYY-MM-DD, inclusive); null when unknown. */
   getDeliveryCalendar(areaId: string, startDate: string, endDate: string): Promise<DeliveryCalendar | null>;
+  /** Addresses and pickup places matching what the user typed. */
+  findAddresses(text: string): Promise<AddressSuggestion[]>;
+  /** Which ways of getting the order are offered at a location. */
+  getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodAvailability[]>;
+  /** Pickup places near a location with their times on `date`, nearest first. */
+  getPickupPlacesNear(location: DeliveryLocation, date: string, limit: number): Promise<NearbyPickup[]>;
 }
 
 /** What the user chose, as saved next to the store choice. */

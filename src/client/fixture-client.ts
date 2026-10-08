@@ -3,8 +3,16 @@ import { listNotFound, storeNotFound } from "../errors.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi } from "../lists/types.js";
 import { finnishDate } from "../stores.js";
 import { DEMO_CATALOGUE } from "../demo/catalogue.js";
-import { demoCalendar, demoPickupAreas } from "../demo/delivery.js";
-import type { DeliveryApi, DeliveryArea, DeliveryCalendar } from "../delivery/types.js";
+import { demoAddresses, demoCalendar, demoDeliveryMethods, demoPickupAreas, demoPickupNear } from "../demo/delivery.js";
+import type {
+  AddressSuggestion,
+  DeliveryApi,
+  DeliveryArea,
+  DeliveryCalendar,
+  DeliveryLocation,
+  DeliveryMethodAvailability,
+  NearbyPickup,
+} from "../delivery/types.js";
 import type {
   BasketCheck,
   BrowseCategoryInput,
@@ -255,6 +263,18 @@ export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi, Del
       if (calendar) return calendar;
     }
     return null;
+  }
+
+  async findAddresses(text: string): Promise<AddressSuggestion[]> {
+    return demoAddresses(text);
+  }
+
+  async getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodAvailability[]> {
+    return demoDeliveryMethods(location);
+  }
+
+  async getPickupPlacesNear(location: DeliveryLocation, date: string, limit: number): Promise<NearbyPickup[]> {
+    return demoPickupNear(this.catalogue.stores, location, date, limit, this.now());
   }
 
   private requireStore(storeId: string): void {

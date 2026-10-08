@@ -67,7 +67,7 @@ const EN_METHOD: Record<DeliveryMethod, string> = {
   unknown: "delivery",
 };
 
-function localTime(iso: string): string {
+export function localTime(iso: string): string {
   return new Intl.DateTimeFormat("fi-FI", { timeZone: "Europe/Helsinki", hour: "2-digit", minute: "2-digit" })
     .format(new Date(iso))
     .replace(".", ":");

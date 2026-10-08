@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.6.2)**. Catalogue, store-selection, login, shopping list and pickup-time tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.7.0)**. Catalogue, store-selection, login, shopping list and pickup-time tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -32,12 +32,13 @@ All of these are built by the Release workflow in GitHub Actions.
 | `add_to_shopping_list` | `listId`, `items[]` (`productId`, `quantity`, `allowSubstitutes`), `storeId` (optional) | Per product: `added`, `updated`, `unchanged`, `missing` or `uncertain`. Needs login |
 | `remove_from_shopping_list` | `listId`, `productIds[]` | The list afterwards, with `removed` and `notOnList`. Needs login |
 | `delete_shopping_list` | `listId` | Deletes the whole list. Needs login |
-| `get_delivery_options` | `storeId` (optional) | Pickup options of the store: `areaId`, `method` (`pickup`, `home_delivery`, `express`), base fee, address and the next free time. Home delivery and express (they need an address) are not listed yet |
+| `find_address` | `query` | Address matches like the site's delivery search box, each with a `location` for `get_delivery_options` |
+| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary) and the nearest pickup places with distance. Each place has `areaId`, fee, address and the next free time. Home delivery and express times are picked on the site for now |
 | `get_delivery_slots` | `areaId`, `fromDate` (optional), `days` (1 to 14) | A calendar: per day, times with start, end, fee and `status` (`available`, `full`, `closed`, `unknown`) |
 | `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
 | `clear_delivery` | none | Forgets the chosen time |
 | `check_basket` | `listId` or `items[]`, `storeId` (optional) | Per product, whether it can be ordered for the chosen time: `ok`, `unavailable` (with S-kaupat's label), `not_in_store`, `not_found` or `unknown` |
-| `open_site` | none | Opens S-kaupat in the server's own window, where the user is already logged in, to finish the order there; returns what to tell the user |
+| `open_site` | `applyChoice` (default true) | Opens S-kaupat in the server's own window, where the user is already logged in, with the chosen pickup time filled in, to finish the order there; returns what to tell the user |
 | `get_site_choice` | `includeStorageShape` | The store and pickup choice the site itself has in that window, and whether it matches `select_delivery` |
 
 Prices are per store. Product tools use the store chosen with `select_store` unless a `storeId` is passed, and fail with `store_not_selected` when there is neither. Fields S-kaupat does not report come back as `null` (or `"unknown"`) rather than guessed.

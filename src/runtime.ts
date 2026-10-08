@@ -36,7 +36,11 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   const selection: StoreSelection = new FileStoreSelection(config.settingsFile);
   const { client, auth, browser } = config.mode === "demo" ? demoParts(config) : liveParts(config);
   const site: SiteWindow | undefined = browser
-    ? { open: (url) => browser.openForUser(url), storage: () => browser.siteStorage() }
+    ? {
+        open: (url) => browser.openForUser(url),
+        storage: () => browser.siteStorage(),
+        writeStorage: (entries) => browser.writeSiteStorage(entries),
+      }
     : undefined;
   return {
     config,

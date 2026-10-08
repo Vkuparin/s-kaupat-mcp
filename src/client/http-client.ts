@@ -4,7 +4,16 @@ import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi, ShoppingListItem } from "../lists/types.js";
 import { deliveryMethod, euros, isoTime, slotDate, slotStatus } from "../delivery/format.js";
-import type { DeliveryApi, DeliveryArea, DeliveryCalendar, DeliverySlot } from "../delivery/types.js";
+import type {
+  AddressSuggestion,
+  DeliveryApi,
+  DeliveryArea,
+  DeliveryCalendar,
+  DeliveryLocation,
+  DeliveryMethodAvailability,
+  DeliverySlot,
+  NearbyPickup,
+} from "../delivery/types.js";
 import type {
   Allergen,
   AllergenLevel,
@@ -127,6 +136,38 @@ const AREA_FIELDS =
   "store { id name } address { street postalCode city }";
 const NEXT_SLOT_FIELDS = "nextDeliverySlot { slotId startDateTime price availability isClosed isFastTrack }";
 const SLOT_FIELDS = "slotId areaId isClosed availability startDateTime endDateTime closingTimestamp price isFastTrack";
+/*
+ * The site's own delivery picker works from an address (seen live 2026-10-08; it sends only hashes of
+ * its queries, so these are this server's own, from the field names in its responses). Values go
+ * into the query text as literals, already validated, so no S-kaupat type names are needed.
+ */
+function addressSearchQuery(text: string): string {
+  return `query AddressSearch { addressAutosuggest(query: ${JSON.stringify(text)}, searchContext: DELIVERY_METHOD_SELECTION) {
+    id title streetAddress postalCode city latitude longitude resultType } }`;
+}
+
+function locationLiteral(l: DeliveryLocation): string {
+  return `{ latitude: ${Number(l.latitude)}, longitude: ${Number(l.longitude)} }`;
+}
+
+/**
+ * The availability summary ("8,90–14,90 €, huomenna") sits in a field that differs by option kind:
+ * slotsDeliveryOptionAvailability for pickup and home delivery, storeDeliveryOptionAvailability for
+ * express. Asking for them needs the option types' names, which are only known from __typename, so
+ * the first call asks for the names and later calls (with `fragments`) for the summaries too.
+ */
+function deliveryMethodsQuery(l: DeliveryLocation, fragments: { typename: string; field: string }[] = []): string {
+  const extra = fragments.map((f) => `... on ${f.typename} { ${f.field} { status summary } }`).join(" ");
+  return `query DeliveryMethods { lookupLocationDeliveryAvailability(input: { postalCode: ${JSON.stringify(l.postalCode)}, coordinates: ${locationLiteral(l)} }) {
+    deliveryOptions { __typename deliveryOptionType name deliveryMethods { id deliveryType name } ${extra} } } }`;
+}
+
+function nearbyPickupQuery(l: DeliveryLocation, date: string, limit: number): string {
+  return `query NearbyPickup { pickupSlotsForCoordinates(startDate: ${JSON.stringify(date)}, endDate: ${JSON.stringify(date)}, location: ${locationLiteral(l)}, limit: ${Math.trunc(limit)}) {
+    slotsInPickupPoints { distance store { id brand name } pickupPoint { id name description address { street city postalCode } }
+      slots { id price closingTime deliveryTimeStart deliveryTimeEnd isAlcoholSellingAllowed } } } }`;
+}
+
 /** At most this many pickup areas are described per store, in one request. */
 const MAX_PICKUP_AREAS = 6;
 
@@ -253,6 +294,8 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
   private readonly origin: string;
   private readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
+  /** Learned from the first delivery methods answer; [] when S-kaupat refused the summaries. */
+  private optionFragments: { typename: string; field: string }[] | null = null;
   private readonly categoryCache = new Map<string, { categories: Category[]; until: number }>();
 
   constructor(private readonly options: HttpClientOptions = {}) {
@@ -507,6 +550,120 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
       })
       .sort((a, b) => a.start.localeCompare(b.start));
     return { area: mapDeliveryArea(area, now), slots };
+  }
+
+  async findAddresses(text: string): Promise<AddressSuggestion[]> {
+    const raw = await this.post("AddressSearch", addressSearchQuery(text), {});
+    const parsed = AddressSearchResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected address search response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected address search response.");
+    }
+    return (parsed.data.data.addressAutosuggest ?? []).map((a) => ({
+      addressId: String(a.id),
+      title: a.title?.trim() || [a.streetAddress, a.city].filter(Boolean).join(", "),
+      street: trimmed(a.streetAddress),
+      postalCode: trimmed(a.postalCode),
+      city: trimmed(a.city),
+      latitude: a.latitude ?? null,
+      longitude: a.longitude ?? null,
+      kind: a.resultType ?? null,
+    }));
+  }
+
+  async getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodAvailability[]> {
+    const ask = async (fragments: { typename: string; field: string }[]) => {
+      const raw = await this.post("DeliveryMethods", deliveryMethodsQuery(location, fragments), {});
+      const parsed = DeliveryMethodsResponseSchema.safeParse(raw);
+      if (!parsed.success) {
+        log.warn("Unexpected delivery methods response", { issues: parsed.error.issues.slice(0, 3) });
+        throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected delivery methods response.");
+      }
+      return parsed.data.data.lookupLocationDeliveryAvailability?.deliveryOptions ?? [];
+    };
+    let options: Awaited<ReturnType<typeof ask>>;
+    if (this.optionFragments) {
+      options = await ask(this.optionFragments);
+    } else {
+      options = await ask([]);
+      const fragments = [...new Map(
+        options
+          .filter((o) => o.__typename && /^[A-Za-z_]\w*$/.test(o.__typename))
+          .map((o) => [
+            o.__typename!,
+            { typename: o.__typename!, field: optionMethod(o.deliveryOptionType) === "express" ? "storeDeliveryOptionAvailability" : "slotsDeliveryOptionAvailability" },
+          ]),
+      ).values()];
+      try {
+        options = await ask(fragments);
+        this.optionFragments = fragments;
+      } catch (err) {
+        // The methods are still known; only the summaries are missing.
+        log.warn("Delivery method summaries unavailable", { message: err instanceof Error ? err.message : String(err) });
+        if (err instanceof SKaupatError && err.code === "upstream_error") this.optionFragments = [];
+      }
+    }
+    return options.map((o) => {
+      const availability = o.slotsDeliveryOptionAvailability ?? o.storeDeliveryOptionAvailability ?? null;
+      const status = availability?.status?.toUpperCase() ?? "";
+      return {
+        method: optionMethod(o.deliveryOptionType),
+        available: status === "AVAILABLE" ? true : /UNAVAILABLE|NOT_AVAILABLE|NONE/.test(status) ? false : null,
+        name: o.name?.trim() || null,
+        summary: availability?.summary?.trim() || null,
+        variants: (o.deliveryMethods ?? []).map((m) => m.deliveryType ?? m.id ?? "").filter(Boolean),
+      };
+    });
+  }
+
+  async getPickupPlacesNear(location: DeliveryLocation, date: string, limit: number): Promise<NearbyPickup[]> {
+    const raw = await this.post("NearbyPickup", nearbyPickupQuery(location, date, limit), {});
+    const parsed = NearbyPickupResponseSchema.safeParse(raw);
+    if (!parsed.success) {
+      log.warn("Unexpected nearby pickup response", { issues: parsed.error.issues.slice(0, 3) });
+      throw new SKaupatError("upstream_error", "S-kaupat returned an unexpected nearby pickup response.");
+    }
+    const now = new Date();
+    return (parsed.data.data.pickupSlotsForCoordinates?.slotsInPickupPoints ?? []).flatMap((p) => {
+      const point = p.pickupPoint;
+      const pointId = point?.id;
+      if (!point || !pointId) return [];
+      const slots = (p.slots ?? [])
+        .flatMap((t) => {
+          const slot = mapSlot(
+            {
+              slotId: t.id,
+              areaId: pointId,
+              startDateTime: t.deliveryTimeStart,
+              endDateTime: t.deliveryTimeEnd,
+              closingTimestamp: t.closingTime,
+              price: t.price,
+              // Only bookable times are listed here.
+              availability: "AVAILABLE",
+              isClosed: false,
+            },
+            pointId,
+            now,
+          );
+          return slot ? [slot] : [];
+        })
+        .sort((a, b) => a.start.localeCompare(b.start));
+      const area: DeliveryArea = {
+        areaId: pointId,
+        name: point.name?.trim() || null,
+        method: "pickup",
+        storeId: p.store?.id ?? null,
+        storeName: p.store?.name?.trim() || null,
+        price: null,
+        description: point.description?.trim() || null,
+        address: point.address
+          ? { street: trimmed(point.address.street), postalCode: trimmed(point.address.postalCode), city: trimmed(point.address.city) }
+          : null,
+        alcoholAllowed: p.slots?.[0]?.isAlcoholSellingAllowed ?? null,
+        nextSlot: slots.find((x) => x.status === "available") ?? null,
+      };
+      return [{ area, distance: p.distance ?? null, slots }];
+    });
   }
 
   // Shopping lists (need a login).
@@ -1032,3 +1189,106 @@ function alcoholAllowed(raw: boolean | string | null | undefined): boolean | nul
 function trimmed(text: string | null | undefined): string | null {
   return text?.trim() || null;
 }
+
+function optionMethod(type: string | null | undefined): DeliveryMethodAvailability["method"] {
+  const t = type?.toUpperCase() ?? "";
+  if (t.startsWith("PICKUP")) return "pickup";
+  if (t.startsWith("HOME_DELIVERY")) return "home_delivery";
+  if (t.startsWith("FAST_TRACK")) return "express";
+  return "unknown";
+}
+
+const AddressSearchResponseSchema = z.object({
+  data: z.object({
+    addressAutosuggest: z
+      .array(
+        z
+          .object({
+            id: z.union([z.string(), z.number()]),
+            title: z.string().nullish(),
+            streetAddress: z.string().nullish(),
+            postalCode: z.string().nullish(),
+            city: z.string().nullish(),
+            latitude: z.coerce.number().nullish(),
+            longitude: z.coerce.number().nullish(),
+            resultType: z.string().nullish(),
+          })
+          .passthrough(),
+      )
+      .nullish(),
+  }),
+});
+
+const OptionAvailabilitySchema = z.object({ status: z.string().nullish(), summary: z.string().nullish() }).passthrough().nullish();
+
+const DeliveryMethodsResponseSchema = z.object({
+  data: z.object({
+    lookupLocationDeliveryAvailability: z
+      .object({
+        deliveryOptions: z
+          .array(
+            z
+              .object({
+                __typename: z.string().nullish(),
+                deliveryOptionType: z.string().nullish(),
+                name: z.string().nullish(),
+                deliveryMethods: z
+                  .array(z.object({ id: z.string().nullish(), deliveryType: z.string().nullish() }).passthrough())
+                  .nullish(),
+                slotsDeliveryOptionAvailability: OptionAvailabilitySchema,
+                storeDeliveryOptionAvailability: OptionAvailabilitySchema,
+              })
+              .passthrough(),
+          )
+          .nullish(),
+      })
+      .passthrough()
+      .nullish(),
+  }),
+});
+
+const NearbyPickupResponseSchema = z.object({
+  data: z.object({
+    pickupSlotsForCoordinates: z
+      .object({
+        slotsInPickupPoints: z
+          .array(
+            z
+              .object({
+                distance: z.coerce.number().nullish(),
+                store: z.object({ id: z.string().nullish(), name: z.string().nullish() }).passthrough().nullish(),
+                pickupPoint: z
+                  .object({
+                    id: z.string().nullish(),
+                    name: z.string().nullish(),
+                    description: z.string().nullish(),
+                    address: z
+                      .object({ street: z.string().nullish(), city: z.string().nullish(), postalCode: z.string().nullish() })
+                      .passthrough()
+                      .nullish(),
+                  })
+                  .passthrough()
+                  .nullish(),
+                slots: z
+                  .array(
+                    z
+                      .object({
+                        id: z.string(),
+                        price: NumberOrString.nullish(),
+                        closingTime: NumberOrString.nullish(),
+                        deliveryTimeStart: z.string().nullish(),
+                        deliveryTimeEnd: z.string().nullish(),
+                        isAlcoholSellingAllowed: z.boolean().nullish(),
+                      })
+                      .passthrough(),
+                  )
+                  .nullish(),
+              })
+              .passthrough(),
+          )
+          .nullish(),
+      })
+      .passthrough()
+      .nullish(),
+  }),
+});

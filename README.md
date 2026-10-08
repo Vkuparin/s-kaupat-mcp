@@ -1,8 +1,8 @@
 # s-kaupat-mcp
 
-An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
+An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **early (v0.8.0)**. Catalogue, store-selection, login, shopping list and pickup-time tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.9.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -39,6 +39,13 @@ All of these are built by the Release workflow in GitHub Actions.
 | `clear_delivery` | none | Forgets the chosen time |
 | `check_basket` | `listId` or `items[]`, `storeId` (optional) | Per product, whether it can be ordered for the chosen time: `ok`, `unavailable` (with S-kaupat's label), `not_in_store`, `not_found` or `unknown` |
 | `open_site` | `applyChoice` (default true) | Opens S-kaupat in the server's own window, where the user is already logged in, with the chosen pickup time filled in, to finish the order there; returns what to tell the user |
+| `get_checkout_options` | `storeId` (optional) | For the app's checkout screen, for the chosen time: payment methods the user can use, saved cards (masked), packaging options and the default, contact details to pre-fill, small-order fee, fees for that time, whether an address is needed. Needs login |
+| `review_order` | `listId` or `items[]`, `payment`, `contact`, `address`, `packagingId`, `note` (all but payment optional) | The order as it would be sent, with per-product checks, S-kaupat's own summary and total, what is `missing`, and a `confirmationCode` when `ready`. Nothing is reserved or ordered. Needs login |
+| `place_order` | the same inputs, `confirmationCode`, `paymentPage` (`own_window`, `app`, `later`) | Reserves the time and places the order on the user's account; for card payment the payment page (opened in the server's window, or its URL for the app). Needs login |
+| `pay_order` | `orderId`, `cardId`, `saveCard`, `paymentPage` | Starts (or retries) the card payment of an order |
+| `confirm_payment` | `orderId` | After the app's own web view returned from the payment page: S-kaupat authorises the payment |
+| `get_order` | `orderId` (optional) | The order's state, payment state, summary and `isCancelable`; without an id the orders placed through this app |
+| `cancel_order` | `orderId` | Cancels the order while S-kaupat allows it |
 | `get_site_choice` | `includeStorageShape` | The store and pickup choice the site itself has in that window, and whether it matches `select_delivery` |
 
 Prices are per store. Product tools use the store chosen with `select_store` unless a `storeId` is passed, and fail with `store_not_selected` when there is neither. Fields S-kaupat does not report come back as `null` (or `"unknown"`) rather than guessed.
@@ -122,7 +129,7 @@ Not yet checked against the live site: which localStorage entry the site keeps i
 S-kaupat has no server-side cart: the website keeps the cart in the browser. Shopping lists are kept on the user's S-kaupat account, and each list on the site has a **Lisää kaikki ostoskoriin** (add all to cart) button. So the flow is:
 
 1. The app (or Claude) fills a list with `create_shopping_list` or `add_to_shopping_list`.
-2. The user opens the list on the S-kaupat site or app, presses *Lisää kaikki ostoskoriin* and checks out there. The first time, the site asks for the store and pickup or home delivery before it fills the cart (the site keeps its own store choice). Every list write returns this as `nextStep` in Finnish and English. The server never places orders or touches payment.
+2. Either the app orders it in-app (`review_order`, `place_order`, see [Checkout](docs/caller-guide.md#5c-checkout-in-the-app)), or the user opens the list on the S-kaupat site or app, presses *Lisää kaikki ostoskoriin* and checks out there. The first time, the site asks for the store and pickup or home delivery before it fills the cart (the site keeps its own store choice). Every list write returns this as `nextStep` in Finnish and English.
 
 Each item is `{ productId, quantity, allowSubstitutes }`. `quantity` is pieces, or kilograms for products sold by weight. `allowSubstitutes` (default `true`) lets the store pick a similar product if this one is out of stock. A product already on the list gets the new quantity rather than a second row. Prices are from the user's selected store.
 

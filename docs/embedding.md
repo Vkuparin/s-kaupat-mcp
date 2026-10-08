@@ -92,6 +92,7 @@ Each setting comes from, highest first: a command-line flag, an environment vari
 | `httpPort` | `SKAUPAT_HTTP_PORT` | `--http-port` | none (stdio) | Serve MCP over HTTP on this port instead of stdio |
 | `httpHost` | `SKAUPAT_HTTP_HOST` | `--http-host` | `127.0.0.1` | Address to listen on |
 | `accessKey` | `SKAUPAT_ACCESS_KEY` | | none | Required with `httpPort`, at least 24 characters |
+| `ordering` | `SKAUPAT_ORDERING` (`false`) | | `true` | `false` turns `place_order` off, for apps that only want lists and prices |
 
 Example `config.json`:
 

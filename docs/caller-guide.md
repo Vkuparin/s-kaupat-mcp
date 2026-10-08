@@ -108,6 +108,38 @@ The time is **not reserved** on S-kaupat. The site keeps its own choice in the b
 
 **Check the basket for that day.** `check_basket` with a `listId` (or `items`) asks S-kaupat whether each product can be ordered for the chosen time. Show problems next to the product, using `label` (S-kaupat's own words, e.g. "Tilapäisesti loppu") when there is one. `checkedFor` is `null` when no time is chosen; then the check is for the store in general.
 
+## 5c. Checkout in the app
+
+The whole order can happen in the app's own screens. The only step outside it is card payment: S-kaupat sends every card payment, saved cards included, to its payment provider's page. Pay on delivery, where the store offers it, needs no page at all.
+
+1. **Checkout screen.** After a time is chosen (5b), `get_checkout_options` gives everything for one screen:
+   - `paymentMethods`: the methods this user can use here: `card`, `on_delivery`, and `invoice` for company customers only. Show them as radio buttons.
+   - `savedCards`: the account's cards (`label`, `maskedNumber`, `expiryStatus`; `expired` ones can't be used, so grey them out) and which one is the default. "New card" is always an option.
+   - `packagingOptions` with prices, and `defaultPackagingId` (the site's own default). Most apps can show the default with a "Change" link.
+   - `contact`: the name, phone and e-mail on the S-kaupat account, to pre-fill. Let the user change them.
+   - `needsAddress`: true for home delivery. Use the address the user picked in `find_address` (`street`, `postalCode`, `city`, coordinates), and ask for the staircase and flat (`extra`).
+   - `smallOrderFee` ("orders under 40,00 € cost 5,90 € more") and `mandatoryProducts` (fees S-kaupat adds for this time).
+2. **Summary.** `review_order` with the products (`listId` or `items`), `payment`, and any changed `contact`, `address`, `packagingId` or `note`. Nothing is reserved or ordered. Show:
+   - `items` with `status` per product for the chosen time (`ok`, `unavailable` with S-kaupat's `label`, `not_in_store`, ...),
+   - `delivery` (place, day, time), `payment` and `contact`,
+   - `summary`: S-kaupat's own rows (`products`, `smallOrderFee`, `serviceFees`, `discounts`, `total`, each with its Finnish `title` and formatted `amount`) and `disclaimer` (weighed products are charged by real weight). Show them as they are. When `summarySource` is `estimate`, S-kaupat's own summary was not available; say "about".
+   - If `ready` is false, `missing` lists the fields to ask for (for example `contact.phone`, `address`) and `problems` what to change (`payment_method_not_offered`, `card_expired`, `ordering_not_possible`, `products_not_sold_here`). Fix them and call `review_order` again.
+3. **Order button.** Only after the user presses it, call `place_order` with exactly the same inputs and `confirmationCode` from the review. If anything changed meanwhile (the cart, the time, the total), it fails with `confirmation_required` (action `review_order`): show the new summary. The code is valid for 15 minutes and works once.
+   `place_order` reserves the time, checks the products once more and creates the order on the user's S-kaupat account. The answer has `order` (`orderNumber`, `state`, `payment`) and `nextStep` in Finnish and English.
+4. **Payment.** For `card`, `payment.url` is the payment provider's page:
+   - `paymentPage: "own_window"` (default) opens it in the server's own browser window, already logged in. When the user has paid, the provider returns to S-kaupat's own page in that window, which completes the payment.
+   - `paymentPage: "app"` only returns the URL, for the app's own web view. When the web view reaches `payment.returnUrlPrefix` (`https://www.s-kaupat.fi/payment/auth/<orderId>?responseCode=OK&...`), close it and call `confirm_payment`. `responseCode=Cancel` means the user cancelled.
+   - `paymentPage: "later"` creates the order without starting a payment; `pay_order` starts it.
+   Then call `get_order` (for example every few seconds while the payment screen is up, and when the app comes back to front): `payment` turns `paid` when done. On `payment_failed` offer `pay_order` again (another card) or `cancel_order`. An unpaid card order is not picked: S-kaupat cancels it if it stays unpaid.
+5. **After.** `get_order` with no `orderId` lists the orders placed through the app; with an `orderId` it gives the state (`received`, `being_picked`, `done`, `cancelled`), payment, S-kaupat's summary and `isCancelable`. `cancel_order` cancels while S-kaupat allows it; ask the user to confirm first.
+
+Rules that keep the user safe:
+- Never call `place_order` without the user pressing an order button after seeing the summary.
+- After `order_uncertain` (the answer was lost, so the order may or may not exist), never place again: call `get_order` and look at the user's orders first.
+- `unpaid_orders` means S-kaupat refuses new orders while an earlier one is unpaid; `unpaidOrders` lists them with a payment link.
+- An app that does not want ordering at all sets `ordering: false` (or `SKAUPAT_ORDERING=false`); `place_order` then answers `orders_disabled`.
+- The order's own access token is kept in the server's data folder (`orders.json`, readable by the user only) and is never returned or logged.
+
 ## 6. Errors
 
 Every failure looks like this:
@@ -139,6 +171,9 @@ Show `userMessage`, then offer what `action` says:
 | `refresh_lists` | The list was deleted (perhaps on the site); show the lists again |
 | `choose_other_product` | Suggest another product (search again) |
 | `install_browser` | "S-kaupat needs Microsoft Edge or Google Chrome on this computer" |
+| `review_order` | Show the order summary again (`review_order`) and let the user confirm or fill in what is missing |
+| `pay` | The payment step again (`pay_order`), or another payment method |
+| `check_orders` | Show the user's orders (`get_order`) before doing anything else |
 | `none` | Nothing the user can fix; log `message` for the developer |
 
 `retryable` is `true` when trying again later can help without the user doing anything.

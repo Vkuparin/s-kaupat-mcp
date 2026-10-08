@@ -22,6 +22,11 @@ Install the newest `s-kaupat-<version>.mcpb`: Claude Desktop → Settings → Ex
 - [ ] Pick a time, then "go to checkout": `open_site` opens S-kaupat logged in, and its header shows the same place and time (for example "Nouto: Prisma Herttoniemi noutolokero pe 9.10. 09.00–10.00"). The storage side of this was confirmed; the header was hidden by the cookie dialog of a fresh profile.
 - [ ] On your list there, "Lisää kaikki ostoskoriin" puts the products in the cart for that time. Don't check out.
 
+## 4b. Ordering in the app (0.9.0)
+- [ ] With a pickup time chosen, ask Claude to order a few products: it shows the summary (S-kaupat's own rows and total, payment method, contact details) and waits for your yes.
+- [ ] Pay on delivery (if your store offers it): the order shows on the site under your orders; cancel it from Claude.
+- [ ] Card: the payment page opens in the extension's own window. Cancel there: `get_order` says awaiting payment; then cancel the order from Claude. (A real card payment is your call.)
+
 ## 5. Shopping list on the site
 - [ ] A list made by Claude shows the same rows on the site; removing a product and deleting the list from Claude show on the site too.
 

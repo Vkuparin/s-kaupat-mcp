@@ -49,7 +49,7 @@ const PACKAGING_QUERY = `query PackagingMaterials($deliveryAreaId: ID!) { delive
 const MANDATORY_QUERY = `query GetMandatoryProducts($id: ID!, $deliveryMethod: DeliveryMethod!, $deliverySlotId: String!, $reservationId: String) {
   store(id: $id) { id mandatoryProducts(deliveryMethod: $deliveryMethod, deliverySlotId: $deliverySlotId, reservationId: $reservationId) {
     ean id name price priceUnit productType } } }`;
-const PROFILE_QUERY = "query CheckoutProfile { userProfile { firstName lastName email phone customerType company { identityCode } } }";
+const PROFILE_QUERY = "query CheckoutProfile { userProfile { firstName lastName email phoneNumber customerType company { identityCode } } }";
 /** Fallback if S-kaupat renames a contact field: the name and customer type are enough to go on. */
 const PROFILE_QUERY_MIN = "query CheckoutProfileName { userProfile { firstName lastName customerType } }";
 const CARDS_QUERY = `query GetUserPaymentCards($storeId: ID) { userPaymentCards(storeId: $storeId) {
@@ -133,7 +133,7 @@ export class HttpCheckoutApi implements CheckoutApi {
       firstName: str(p.firstName),
       lastName: str(p.lastName),
       email: str(p.email),
-      phone: str(p.phone),
+      phone: str(p.phoneNumber),
       customerType: type === "b2b" || type === "b2c" ? type : null,
       companyId: str(obj(p.company).identityCode),
     };

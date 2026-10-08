@@ -12,9 +12,12 @@ import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stor
 import { deliveryInstruction, isExpired, localTime } from "./delivery/format.js";
 import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.js";
 import { prefillEntries, readSiteChoice, type SitePrefill } from "./browser/site-state.js";
+import { registerCheckoutTools } from "./checkout/tools.js";
+import type { CheckoutApi } from "./checkout/types.js";
+import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.8.0";
+export const SERVER_VERSION = "0.9.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -40,6 +43,12 @@ export interface ServerOptions {
   site?: SiteWindow;
   /** demo: sample data, no S-kaupat account (the extension's Demo mode). Reported by get_setup_status. */
   mode?: "live" | "demo";
+  /** Checkout calls. Without it the checkout tools are not offered. */
+  checkout?: CheckoutApi;
+  /** Orders placed through this server and their access tokens. Defaults to memory only. */
+  orders?: OrderStore;
+  /** false turns place_order off. Default true. */
+  ordering?: boolean;
 }
 
 export interface SiteWindow {
@@ -61,7 +70,8 @@ export const SERVER_INSTRUCTIONS = [
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
   "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Pikatoimitus (express) is ordered on the site.",
-  "6. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the site asks for the store and pickup or delivery; nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in. These tools never place orders, reserve times or pay.",
+  "6. Order in the app: get_checkout_options (payment methods, saved cards, packaging, contact details), then review_order and show its summary and total. Call place_order with review_order's confirmationCode only after the user explicitly says yes to that summary. Card payment opens the payment provider's page in this server's window; get_order then shows when it is paid. Never place again after order_uncertain: check get_order first.",
+  "7. Or the user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
 
@@ -952,6 +962,26 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       }),
   );
 
+  if (options.checkout) {
+    registerCheckoutTools(server, {
+      client,
+      auth,
+      checkout: options.checkout,
+      orders: options.orders ?? new MemoryOrderStore(),
+      selection,
+      lists: options.lists,
+      withToken,
+      resolveStoreId,
+      currentDelivery,
+      deliveryView: (d) => deliveryView(d, now()),
+      storeName: storeNameFor,
+      openWindow: options.site ? (url) => options.site!.open(url) : undefined,
+      orderingEnabled: options.ordering ?? true,
+      now,
+      run,
+    });
+  }
+
   return server;
 }
 
@@ -1147,7 +1177,7 @@ function storeView(store: SavedStore, details: StoreDetails | undefined, now: Da
   };
 }
 
-async function run(tool: string, fn: () => Promise<object>): Promise<CallToolResult> {
+export async function run(tool: string, fn: () => Promise<object>): Promise<CallToolResult> {
   try {
     const result = { schemaVersion: SCHEMA_VERSION, ...(await fn()) };
     return {

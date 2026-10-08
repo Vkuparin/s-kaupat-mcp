@@ -1,3 +1,4 @@
+import { DemoCheckout } from "../demo/checkout.js";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -28,7 +29,8 @@ async function connect(
   }: { selection?: StoreSelection; auth?: SKaupatAuth; lists?: ShoppingListApi; now?: () => Date } = {},
 ) {
   const delivery = client instanceof FixtureSKaupatClient ? client : undefined;
-  const server = createServer(client, auth, { selection, lists, delivery, now });
+  const checkout = delivery ? new DemoCheckout() : undefined;
+  const server = createServer(client, auth, { selection, lists, delivery, now, checkout });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), mcp.connect(clientTransport)]);
@@ -40,19 +42,23 @@ async function call(mcp: Client, name: string, args: Record<string, unknown>) {
   return { isError: res.isError === true, data: res.structuredContent as any };
 }
 
-test("lists the catalogue, store, login and shopping list tools", async () => {
+test("lists the catalogue, store, login, shopping list, delivery and checkout tools", async () => {
   const mcp = await connect();
   const { tools } = await mcp.listTools();
   assert.deepEqual(tools.map((t) => t.name).sort(), [
     "add_to_shopping_list",
     "browse_category",
+    "cancel_order",
     "check_basket",
     "clear_delivery",
+    "confirm_payment",
     "create_shopping_list",
     "delete_shopping_list",
     "find_address",
+    "get_checkout_options",
     "get_delivery_options",
     "get_delivery_slots",
+    "get_order",
     "get_product_details",
     "get_products",
     "get_selected_store",
@@ -63,7 +69,10 @@ test("lists the catalogue, store, login and shopping list tools", async () => {
     "list_categories",
     "login_status",
     "open_site",
+    "pay_order",
+    "place_order",
     "remove_from_shopping_list",
+    "review_order",
     "search_products",
     "search_stores",
     "select_delivery",

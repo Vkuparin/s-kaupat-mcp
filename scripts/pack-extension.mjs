@@ -7,7 +7,10 @@ import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const stage = join(root, "build", "extension");
-const run = (cmd, cwd = root) => execSync(cmd, { cwd, stdio: "inherit" });
+const run = (cmd, cwd = root, env = process.env) => execSync(cmd, { cwd, stdio: "inherit", env });
+// Under `npm run`, the outer npm passes its settings down as npm_config_* variables. npm 11 then refused the
+// inner install (EALLOWSCRIPTS, seen 2026-10-08 with npm 11.19); the inner install needs none of them.
+const cleanEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.toLowerCase().startsWith("npm_config_")));
 
 const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
 const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
@@ -26,7 +29,7 @@ cpSync(join(root, "dist"), join(stage, "dist"), {
   filter: (src) => !src.includes(`${join("dist", "test")}`) && !src.endsWith(".map"),
 });
 // Runtime dependencies only; the extension ships its own node_modules.
-run("npm ci --omit=dev --ignore-scripts --no-audit --no-fund", stage);
+run("npm ci --omit=dev --ignore-scripts --no-audit --no-fund", stage, cleanEnv);
 
 const output = join(root, `s-kaupat-${pkg.version}.mcpb`);
 run(`npx mcpb validate "${join(stage, "manifest.json")}"`);

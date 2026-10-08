@@ -3,9 +3,9 @@
   "manifest_version": "0.3",
   "name": "s-kaupat-mcp",
   "display_name": "S-kaupat",
-  "version": "0.8.0",
-  "description": "Find S-kaupat stores, search groceries and fill your S-kaupat shopping lists.",
-  "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others) and a pickup time, search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. You finish on the S-kaupat site by pressing \"Lisää kaikki ostoskoriin\" on the list and checking out; this extension never places orders or touches payment.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 3 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
+  "version": "0.9.0",
+  "description": "Find S-kaupat stores, search groceries, fill your shopping lists and order with pickup or home delivery.",
+  "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others) and a pickup time, search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. Claude can also place the order for you: it shows the summary with S-kaupat's own total and places the order only after you say yes. Card payment happens on the payment provider's page, which opens in the extension's own window; pay on delivery needs nothing more. Turn \"Allow ordering\" off in the settings if you only want lists.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 3 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
   "author": {
     "name": "Vkuparin",
     "url": "https://github.com/Vkuparin"
@@ -22,7 +22,8 @@
       "command": "node",
       "args": ["${__dirname}/dist/index.js"],
       "env": {
-        "SKAUPAT_DEMO": "${user_config.demo_mode}"
+        "SKAUPAT_DEMO": "${user_config.demo_mode}",
+        "SKAUPAT_ORDERING": "${user_config.allow_ordering}"
       }
     }
   },
@@ -51,7 +52,14 @@
     { "name": "clear_delivery", "description": "Forget the chosen time." },
     { "name": "check_basket", "description": "Check that a list's products can be ordered for the chosen time." },
     { "name": "open_site", "description": "Open S-kaupat in the extension's own logged-in window, with the chosen pickup time filled in." },
-    { "name": "get_site_choice", "description": "What store and pickup time the S-kaupat site itself has chosen." }
+    { "name": "get_site_choice", "description": "What store and pickup time the S-kaupat site itself has chosen." },
+    { "name": "get_checkout_options", "description": "Payment methods, saved cards, packaging and contact details for checkout." },
+    { "name": "review_order", "description": "The order summary with S-kaupat's own total, before the user confirms." },
+    { "name": "place_order", "description": "Place the order the user confirmed; opens the card payment page." },
+    { "name": "pay_order", "description": "Start or retry the card payment of an order." },
+    { "name": "confirm_payment", "description": "Finish a card payment shown in the app's own view." },
+    { "name": "get_order", "description": "An order's status and payment, or the orders placed here." },
+    { "name": "cancel_order", "description": "Cancel an order when the user asks." }
   ],
   "user_config": {
     "demo_mode": {
@@ -59,6 +67,13 @@
       "title": "Demo mode",
       "description": "Use built-in sample stores and products instead of S-kaupat. Nothing is sent to S-kaupat and no login is needed.",
       "default": false,
+      "required": false
+    },
+    "allow_ordering": {
+      "type": "boolean",
+      "title": "Allow ordering",
+      "description": "Let Claude place orders after you confirm the summary. Off: lists and prices only.",
+      "default": true,
       "required": false
     }
   },

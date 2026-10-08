@@ -34,6 +34,8 @@ export interface SKaupatConfig {
   httpHost: string;
   /** Key every HTTP request must send as "Authorization: Bearer <key>". Required with httpPort. */
   accessKey: string | null;
+  /** Whether place_order may place orders. An app that only wants lists and prices can turn it off. */
+  ordering: boolean;
 }
 
 /** Names of the environment variables, for the docs and error messages. */
@@ -53,6 +55,7 @@ export const ENV = {
   httpPort: "SKAUPAT_HTTP_PORT",
   httpHost: "SKAUPAT_HTTP_HOST",
   accessKey: "SKAUPAT_ACCESS_KEY",
+  ordering: "SKAUPAT_ORDERING",
 } as const;
 
 /** Shortest access key accepted for the HTTP server. */
@@ -106,6 +109,7 @@ export function loadConfig(options: LoadConfigOptions = {}): { config: SKaupatCo
     httpPort: merged.httpPort ?? null,
     httpHost: merged.httpHost ?? "127.0.0.1",
     accessKey: merged.accessKey ?? null,
+    ordering: merged.ordering ?? true,
   };
   if (config.httpPort !== null) {
     if (!config.accessKey) {
@@ -137,6 +141,7 @@ function envValues(env: Env): Partial_ {
   if (env[ENV.httpPort]) out.httpPort = parsePort(env[ENV.httpPort]!, ENV.httpPort);
   if (env[ENV.httpHost]) out.httpHost = env[ENV.httpHost]!;
   if (env[ENV.accessKey]) out.accessKey = env[ENV.accessKey]!;
+  if (env[ENV.ordering]) out.ordering = !["0", "false", "off"].includes(env[ENV.ordering]!.toLowerCase());
   return out;
 }
 
@@ -164,6 +169,10 @@ function readConfigFile(path: string): Partial_ {
       case "debug":
         if (typeof value !== "boolean") throw new ConfigError(`${where(key)} must be true or false.`);
         out.debug = value;
+        break;
+      case "ordering":
+        if (typeof value !== "boolean") throw new ConfigError(`${where(key)} must be true or false.`);
+        out.ordering = value;
         break;
       case "httpPort":
         out.httpPort = parsePort(String(value), where(key));

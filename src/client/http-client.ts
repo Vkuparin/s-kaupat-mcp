@@ -774,30 +774,63 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
     };
   }
 
+  /**
+   * A GraphQL call for the checkout adapter (src/checkout/http.ts). Its variables hold the user's
+   * name, phone and address, so they are never logged, nor is S-kaupat's answer to a rejected query.
+   * With rawErrors, GraphQL errors come back in the body (errors[].extensions.errorType) instead of
+   * being thrown, so the adapter can map S-kaupat's order errors.
+   */
+  async graphql(
+    operationName: string,
+    query: string,
+    variables: Record<string, unknown>,
+    options: { accessToken?: string | null; orderToken?: string | null; rawErrors?: boolean } = {},
+  ): Promise<GraphQLBody> {
+    const headers: Record<string, string> = {};
+    if (options.orderToken) headers["x-order-access-token"] = options.orderToken;
+    return (await this.post(operationName, query, variables, options.accessToken ?? undefined, {
+      headers,
+      rawErrors: options.rawErrors,
+      private: true,
+    })) as GraphQLBody;
+  }
+
   /** POST with this client's own query text. The access token, when given, is never logged. */
   private async post(
     operationName: string,
     query: string,
     variables: Record<string, unknown>,
     accessToken?: string,
+    options: { headers?: Record<string, string>; rawErrors?: boolean; private?: boolean } = {},
   ): Promise<unknown> {
-    log.debug("GraphQL request", { operationName, variables, authenticated: Boolean(accessToken) });
+    log.debug("GraphQL request", {
+      operationName,
+      ...(options.private ? {} : { variables }),
+      authenticated: Boolean(accessToken),
+    });
     const headers: Record<string, string> = {
       Accept: "application/json",
       "Content-Type": "application/json",
       Origin: this.origin,
       Referer: `${this.origin}/`,
+      ...options.headers,
     };
     // The site sends the raw JWT, with no "Bearer" prefix.
     if (accessToken) headers.authorization = accessToken;
-    return this.send(operationName, new URL(this.apiUrl), {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ operationName, query, variables }),
-    });
+    return this.send(
+      operationName,
+      new URL(this.apiUrl),
+      { method: "POST", headers, body: JSON.stringify({ operationName, query, variables }) },
+      options,
+    );
   }
 
-  private async send(operationName: string, url: URL, init: RequestInit): Promise<unknown> {
+  private async send(
+    operationName: string,
+    url: URL,
+    init: RequestInit,
+    options: { rawErrors?: boolean; private?: boolean } = {},
+  ): Promise<unknown> {
     const response = await this.fetchImpl(url, { ...init, signal: AbortSignal.timeout(this.timeoutMs) });
     const authenticated = Boolean((init.headers as Record<string, string> | undefined)?.authorization);
 
@@ -809,11 +842,16 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
     }
     if (!response.ok) {
       // A rejected query (HTTP 400) means S-kaupat changed its API; the body names the field.
-      if (response.status === 400) log.warn("S-kaupat rejected a query", { operationName, body: await safeText(response) });
+      if (response.status === 400) {
+        // A private call's rejection may echo the user's details back; log only the field names it complains about.
+        const body = await safeText(response);
+        log.warn("S-kaupat rejected a query", { operationName, body: options.private ? redactValues(body) : body });
+      }
       throw new SKaupatError("upstream_error", `S-kaupat API returned HTTP ${response.status}.`);
     }
 
     const body: unknown = await response.json();
+    if (options.rawErrors) return body;
     const errors = GraphQLErrorsSchema.safeParse(body);
     if (errors.success && errors.data.errors.length > 0) {
       const first = errors.data.errors[0];
@@ -871,6 +909,22 @@ function mapProduct(p: z.infer<typeof ApiProductSchema>, storeId: string, observ
       : null,
     observedAt,
   };
+}
+
+/**
+ * GraphQL's validation messages repeat the rejected value ("got invalid value {...}; Field \"x\" ...").
+ * Keep the wording and field names, drop the values.
+ */
+export function redactValues(text: string): string {
+  return text
+    .replace(/got invalid value .*?; /g, "got invalid value …; ")
+    .replace(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g, "…@…")
+    .replace(/\+?\d[\d\s-]{6,}\d/g, "…");
+}
+
+export interface GraphQLBody {
+  data?: Record<string, unknown> | null;
+  errors?: { message?: string; path?: unknown[]; extensions?: Record<string, unknown> }[];
 }
 
 async function safeText(response: Response): Promise<string> {

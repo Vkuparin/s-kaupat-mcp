@@ -8,7 +8,11 @@ import { createTokenStore } from "./auth/token-store.js";
 import type { SKaupatAuth } from "./auth/types.js";
 import { createBrowserFetch } from "./browser/browser-fetch.js";
 import { BrowserSession } from "./browser/session.js";
+import { HttpCheckoutApi } from "./checkout/http.js";
+import { FileOrderStore } from "./checkout/order-store.js";
+import type { CheckoutApi } from "./checkout/types.js";
 import { FixtureSKaupatClient } from "./client/fixture-client.js";
+import { DemoCheckout } from "./demo/checkout.js";
 import { HttpSKaupatClient } from "./client/http-client.js";
 import type { SKaupatClient } from "./client/types.js";
 import type { SKaupatConfig } from "./config.js";
@@ -34,7 +38,8 @@ export interface SKaupatRuntime {
 export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   setDebugLogging(config.debug);
   const selection: StoreSelection = new FileStoreSelection(config.settingsFile);
-  const { client, auth, browser } = config.mode === "demo" ? demoParts(config) : liveParts(config);
+  const { client, auth, browser, checkout } = config.mode === "demo" ? demoParts(config) : liveParts(config);
+  const orders = new FileOrderStore(join(config.dataDir, config.mode === "demo" ? "demo-orders.json" : "orders.json"));
   const site: SiteWindow | undefined = browser
     ? {
         open: (url) => browser.openForUser(url),
@@ -44,7 +49,17 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
     : undefined;
   return {
     config,
-    createMcpServer: () => createServer(client, auth, { selection, lists: client, delivery: client, site, mode: config.mode }),
+    createMcpServer: () =>
+      createServer(client, auth, {
+        selection,
+        lists: client,
+        delivery: client,
+        site,
+        mode: config.mode,
+        checkout,
+        orders,
+        ordering: config.ordering,
+      }),
     close: async () => {
       await browser?.close();
     },
@@ -55,12 +70,13 @@ interface Parts {
   client: SKaupatClient & ShoppingListApi & DeliveryApi;
   auth: SKaupatAuth;
   browser: BrowserSession | null;
+  checkout: CheckoutApi;
 }
 
 function demoParts(config: SKaupatConfig): Parts {
   log.info("Demo mode: built-in sample data, no network", config.demoCatalogueFile ? { catalogue: config.demoCatalogueFile } : undefined);
   const client = config.demoCatalogueFile ? new FixtureSKaupatClient(config.demoCatalogueFile) : new FixtureSKaupatClient();
-  return { client, auth: new FixtureAuth(), browser: null };
+  return { client, auth: new FixtureAuth(), browser: null, checkout: new DemoCheckout() };
 }
 
 function liveParts(config: SKaupatConfig): Parts {
@@ -84,5 +100,6 @@ function liveParts(config: SKaupatConfig): Parts {
     // nobody uses it; the login is renewed on the next call instead.
     backgroundRenewal: !browser,
   });
-  return { client: new HttpSKaupatClient({ fetchImpl }), auth, browser };
+  const client = new HttpSKaupatClient({ fetchImpl });
+  return { client, auth, browser, checkout: new HttpCheckoutApi(client) };
 }

@@ -17,7 +17,7 @@ import type { CheckoutApi } from "./checkout/types.js";
 import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.9.0";
+export const SERVER_VERSION = "0.10.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -69,7 +69,7 @@ export const SERVER_INSTRUCTIONS = [
   "2. Search with search_products (queries in Finnish work best, e.g. 'maito', 'ruisleipä') or browse with list_categories and browse_category.",
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
-  "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Pikatoimitus (express) is ordered on the site.",
+  "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Pikatoimitus (express) works the same way: an expressStores entry's areaId goes to get_delivery_slots.",
   "6. Order in the app: get_checkout_options (payment methods, saved cards, packaging, contact details), then review_order and show its summary and total. Call place_order with review_order's confirmationCode only after the user explicitly says yes to that summary. Card payment opens the payment provider's page in this server's window; get_order then shows when it is paid. Never place again after order_uncertain: check get_order first.",
   "7. Or the user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
@@ -660,9 +660,9 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         "methods are offered there (pickup, home_delivery, express, each with S-kaupat's own Finnish summary such " +
         "as '8,90–14,90 € • Huomenna'); pickupOptions, the pickup places nearest to it with distanceMeters; " +
         "homeDeliveryOptions, the stores delivering there; and expressStores, stores that deliver within about an " +
-        "hour. Each pickup and home delivery option has an areaId for get_delivery_slots and nextSlot, so the app " +
-        "can show 'next free: tomorrow 10–12' at once. Express (Pikatoimitus) is ordered on the site for now " +
-        "(siteOnlyMethods).",
+        "hour. Each option, express stores included, has an areaId for get_delivery_slots; pickup and home " +
+        "delivery options also have nextSlot, so the app can show 'next free: tomorrow 10–12' at once. All methods " +
+        "can be chosen and ordered in the app (siteOnlyMethods is kept empty for older apps).",
       inputSchema: {
         storeId,
         location: z
@@ -720,7 +720,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
             homeDeliveryOptions,
             expressStores: answer.expressStores,
             ...(failed.length > 0 ? { partial: Object.fromEntries(failed.map(([part]) => [part, true])) } : {}),
-            siteOnlyMethods: answer.methods.filter((m) => m.method === "express" && m.available !== false).map((m) => m.method),
+            siteOnlyMethods: [] as string[],
           };
         }
         const store = resolveStoreId(storeId);
@@ -732,7 +732,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
           storeName: storeNameFor(store),
           selectedAreaId: selection.getDelivery()?.area.areaId ?? null,
           options,
-          methodsNotYetSupported: ["home_delivery", "express"],
+          methodsNeedingLocation: ["home_delivery", "express"],
         };
       }),
   );
@@ -784,7 +784,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         "Save the time the user picked (areaId and slotId from get_delivery_slots), after checking it is still " +
         "free. It is remembered like the store choice, check_basket checks lists against that day, and the " +
         "finishing instructions say exactly what to pick on the site. It does not reserve the time on S-kaupat: " +
-        "the user confirms it on the site when checking out. Fails with slot_unavailable if it was taken meanwhile.",
+        "place_order does that when the user orders in the app (or the user confirms it on the site). Fails with " +
+        "slot_unavailable if it was taken meanwhile.",
       inputSchema: {
         areaId: z.string().min(1).describe("areaId from get_delivery_options."),
         slotId: z.string().min(1).describe("slotId from get_delivery_slots."),

@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **early (v0.9.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.10.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -33,7 +33,7 @@ All of these are built by the Release workflow in GitHub Actions.
 | `remove_from_shopping_list` | `listId`, `productIds[]` | The list afterwards, with `removed` and `notOnList`. Needs login |
 | `delete_shopping_list` | `listId` | Deletes the whole list. Needs login |
 | `find_address` | `query` | Address matches like the site's delivery search box, each with a `location` for `get_delivery_options` |
-| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary), the nearest pickup places with `distanceMeters`, the stores delivering home there, and Pikatoimitus stores. Each pickup and home delivery option has `areaId`, fee and the next free time. Pikatoimitus is ordered on the site |
+| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary), the nearest pickup places with `distanceMeters`, the stores delivering home there, and Pikatoimitus stores. Each option has an `areaId` for `get_delivery_slots`; pickup and home delivery options also have the fee and next free time. All three methods can be ordered in the app |
 | `get_delivery_slots` | `areaId`, `fromDate` (optional), `days` (1 to 14) | A calendar: per day, times with start, end, fee and `status` (`available`, `full`, `closed`, `unknown`) |
 | `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
 | `clear_delivery` | none | Forgets the chosen time |

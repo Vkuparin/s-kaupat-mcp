@@ -8,6 +8,7 @@ import { SKaupatError, toSKaupatError } from "../errors.js";
 import type { ShoppingListApi } from "../lists/types.js";
 import type { WithToken } from "../lists/service.js";
 import { log } from "../log.js";
+import { handoverOf } from "../delivery/format.js";
 import type { SavedDelivery } from "../delivery/types.js";
 import type { StoreSelection } from "../selection.js";
 import type {
@@ -122,8 +123,9 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
     if (!d) {
       throw new SKaupatError("order_not_ready", "Choose a pickup or delivery time first (select_delivery).", { missing: ["delivery"] });
     }
-    if (d.area.method !== "pickup" && d.area.method !== "home_delivery") {
-      throw new SKaupatError("unsupported", "Only pickup and home delivery orders can be placed here for now.");
+    if (!handoverOf(d.area)) {
+      // S-kaupat did not say whether this express option is collected or delivered (or an older version saved it).
+      throw new SKaupatError("unsupported", "This delivery option can't be ordered in the app. Choose the time again, or finish on the site (open_site).");
     }
     return d;
   };
@@ -190,7 +192,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
     };
     const missing: string[] = [];
     for (const key of ["firstName", "lastName", "phone", "email"] as const) if (!contact[key]) missing.push(`contact.${key}`);
-    if (draft.delivery.area.method === "home_delivery" && !draft.address) missing.push("address");
+    if (handoverOf(draft.delivery.area) === "home_delivery" && !draft.address) missing.push("address");
     if (!draft.packaging) missing.push("packagingId");
     const problems: { code: string; detail?: unknown }[] = [];
     if (!methods.includes(draft.payment.method)) problems.push({ code: "payment_method_not_offered", detail: { offered: methods } });
@@ -265,7 +267,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
       ctx.run("get_checkout_options", async () => {
         const store = ctx.resolveStoreId(storeId);
         const delivery = requireDelivery(store);
-        const method = delivery.area.method as "pickup" | "home_delivery";
+        const method = handoverOf(delivery.area)!;
         const [info, packaging, mandatory, profile, cards] = await Promise.all([
           ctx.checkout.getStoreCheckoutInfo(store),
           ctx.checkout.getPackagingOptions(delivery.area.areaId),
@@ -280,7 +282,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
           storeId: store,
           storeName: ctx.storeName(store),
           delivery: ctx.deliveryView(delivery),
-          paymentMethods: paymentMethodsFor(info.paymentMethods, profile, delivery.slot.express),
+          paymentMethods: paymentMethodsFor(info.paymentMethods, profile, fastTrack(delivery)),
           savedCards: cards,
           packagingOptions: packaging,
           defaultPackagingId: defaultPackaging(packaging)?.packagingId ?? null,
@@ -319,7 +321,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
           draft.payment.method === "card" ? ctx.withToken((t) => ctx.checkout.getSavedCards(t, draft.storeId)) : Promise.resolve([]),
           ctx.checkout.validateOrder(draft.storeId, draft.delivery.slot.slotId, draft.delivery.slot.date, draft.items, draft.delivery.area.areaId),
         ]);
-        const methods = paymentMethodsFor(info.paymentMethods, profile, draft.delivery.slot.express);
+        const methods = paymentMethodsFor(info.paymentMethods, profile, fastTrack(draft.delivery));
         const { contact, missing, problems } = complete(draft, profile, methods, cards);
         const blocked = validation.items.filter((v) => v.status !== "ok" && v.status !== "unknown");
         if (!validation.orderingPossible) problems.push({ code: "ordering_not_possible", detail: { productIds: blocked.map((b) => b.productId) } });
@@ -408,7 +410,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
           ctx.checkout.getCustomerProfile(token),
           draft.payment.method === "card" ? ctx.checkout.getSavedCards(token, draft.storeId) : Promise.resolve([]),
         ]);
-        const { contact, missing, problems } = complete(draft, profile, paymentMethodsFor(info.paymentMethods, profile, draft.delivery.slot.express), cards);
+        const { contact, missing, problems } = complete(draft, profile, paymentMethodsFor(info.paymentMethods, profile, fastTrack(draft.delivery)), cards);
         if (missing.length > 0 || problems.length > 0) {
           throw new SKaupatError("order_not_ready", "The order is not complete.", { missing, problems });
         }
@@ -418,7 +420,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
         }
 
         // Express times need no reservation; others do when logged in (the site's rule).
-        const reservation = draft.delivery.slot.express ? null : await ctx.checkout.reserveSlot(token, draft.delivery.slot.slotId);
+        const reservation = fastTrack(draft.delivery) ? null : await ctx.checkout.reserveSlot(token, draft.delivery.slot.slotId);
         const release = async () => {
           if (reservation) await ctx.checkout.releaseReservation(token, reservation.reservationId).catch(() => {});
         };
@@ -609,6 +611,11 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
   );
 }
 
+/** Express (Pikatoimitus) area or a fast-track time: the site reserves nothing and offers no invoice. */
+function fastTrack(delivery: SavedDelivery): boolean {
+  return delivery.area.method === "express" || delivery.slot.express;
+}
+
 function defaultPackaging(options: PackagingOption[]): PackagingOption | null {
   // The site's default: the first material that is not a deposit bag.
   return options.find((p) => p.type !== "deposit_bag") ?? options[0] ?? null;
@@ -624,7 +631,7 @@ function estimate(draft: Draft): OrderSummary {
     products: [{ title: "Tuotteet (arvio)", amount: euros(products) }],
     smallOrderFee: [],
     serviceFees: [
-      { title: draft.delivery.area.method === "pickup" ? "Noutomaksu" : "Toimitusmaksu", amount: euros(fee) },
+      { title: handoverOf(draft.delivery.area) === "pickup" ? "Noutomaksu" : "Toimitusmaksu", amount: euros(fee) },
       ...(packaging ? [{ title: "Pakkausmateriaali (arvio)", amount: euros(packaging) }] : []),
     ],
     discounts: [],

@@ -165,6 +165,35 @@ test("review lists what is missing: address for home delivery, payment not offer
   assert.equal(review.data.confirmationCode, null);
 });
 
+test("Pikatoimitus is ordered in the app: home address needed, no time reserved, no invoice", async () => {
+  const { mcp, checkout } = await connect();
+  const found = await call(mcp, "find_address", { query: "esimerkkitie 5" });
+  const delivery = await call(mcp, "get_delivery_options", { location: found.data.addresses[0].location });
+  assert.deepEqual(delivery.data.siteOnlyMethods, []);
+  const express = delivery.data.expressStores[0];
+  const slots = await call(mcp, "get_delivery_slots", { areaId: express.areaId, fromDate: "2026-10-08", days: 1 });
+  assert.equal(slots.data.area.method, "express");
+  const slot = slots.data.days[0].slots.find((s: any) => s.status === "available");
+  assert.equal(slot.express, true);
+  const chosen = await call(mcp, "select_delivery", { areaId: express.areaId, slotId: slot.slotId });
+  assert.equal(chosen.isError, false);
+
+  const options = await call(mcp, "get_checkout_options");
+  assert.equal(options.data.needsAddress, true);
+  assert.deepEqual(options.data.paymentMethods, ["card", "on_delivery"]);
+
+  const draft = { items: ITEMS, payment: { method: "on_delivery" } };
+  const noAddress = await call(mcp, "review_order", draft);
+  assert.deepEqual(noAddress.data.missing, ["address"]);
+  const withAddress = { ...draft, address: { street: "Esimerkkitie 5", postalCode: "00100", city: "Helsinki" } };
+  const review = await call(mcp, "review_order", withAddress);
+  assert.equal(review.data.ready, true);
+  const placed = await call(mcp, "place_order", { ...withAddress, confirmationCode: review.data.confirmationCode });
+  assert.equal(placed.isError, false);
+  assert.equal(placed.data.order.payment, "not_needed");
+  assert.deepEqual(checkout.calls, ["order:on_delivery"], "an express time is not reserved first");
+});
+
 test("place_order can be turned off", async () => {
   const { mcp } = await connect({ ordering: false });
   const res = await call(mcp, "place_order", { items: ITEMS, payment: { method: "card" }, confirmationCode: "x" });

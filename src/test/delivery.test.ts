@@ -8,6 +8,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { FixtureAuth } from "../auth/fixture-auth.js";
 import { FixtureSKaupatClient } from "../client/fixture-client.js";
 import { HttpSKaupatClient } from "../client/http-client.js";
+import { handoverOf, rawHandover } from "../delivery/format.js";
 import { FileStoreSelection, MemoryStoreSelection, type StoreSelection } from "../selection.js";
 import { createServer, type SiteWindow } from "../server.js";
 
@@ -45,7 +46,7 @@ test("walks the pickup choice: options, calendar, choice, finishing instructions
   );
   // Ordering closes three hours ahead, so at 09:00 the next free time today is 14–16.
   assert.equal(options.data.options[0].nextSlot.start, "2026-10-08T11:00:00.000Z");
-  assert.deepEqual(options.data.methodsNotYetSupported, ["home_delivery", "express"]);
+  assert.deepEqual(options.data.methodsNeedingLocation, ["home_delivery", "express"]);
 
   const slots = await call(mcp, "get_delivery_slots", { areaId: "demo-pickup-fixture-store-1", days: 2 });
   assert.equal(slots.isError, false);
@@ -360,7 +361,7 @@ test("from an address: methods offered there, nearest pickup places, home delive
       ["express", true],
     ],
   );
-  assert.deepEqual(res.data.siteOnlyMethods, ["express"]);
+  assert.deepEqual(res.data.siteOnlyMethods, []);
   // Nearest first: the Helsinki store's two areas, then the other Helsinki store.
   assert.deepEqual(
     res.data.pickupOptions.slice(0, 3).map((o: any) => o.areaId),
@@ -539,4 +540,13 @@ test("a home delivery instruction names the store, not the internal area name", 
     selectedAt: "2026-10-08T07:00:00.000Z",
   });
   assert.equal(text.fi, 'Valitse sivulla "Valitse toimitustapa": Kotiinkuljetus, Prisma ruoan verkkokauppa, pe 9.10. klo 07:00–11:00.');
+});
+
+test("express areas keep whether they are collected or delivered", () => {
+  assert.equal(handoverOf({ method: "pickup" }), "pickup");
+  assert.equal(handoverOf({ method: "express", handover: "home_delivery" }), "home_delivery");
+  assert.equal(handoverOf({ method: "express" }), null);
+  assert.equal(rawHandover("PICKUP"), "pickup");
+  assert.equal(rawHandover("HOME_DELIVERY"), "home_delivery");
+  assert.equal(rawHandover("DRONE"), null);
 });

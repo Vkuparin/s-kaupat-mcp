@@ -22,7 +22,7 @@ Recommended starting implementation: TypeScript with a reusable client and a thi
 | `remove_cart_item` | Remove one known line and verify absence. |
 | `open_cart` | Hand the same authenticated cart to a human-controlled browser window; automation detaches before checkout. |
 
-Tool names above are proposed, not existing upstream APIs. Publish JSON schemas, capabilities, schema version and examples with the release. Tool errors need stable codes such as `auth_required`, `session_expired`, `blocked`, `invalid_quantity`, `context_changed`, `unavailable`, `conflict`, `unsupported` and `write_uncertain`.
+Tool names above are proposed, not existing upstream APIs. Publish JSON schemas, capabilities, schema version and examples with the release. Tool errors need stable codes such as `login_required`, `session_expired`, `blocked`, `invalid_quantity`, `context_changed`, `unavailable`, `conflict`, `unsupported` and `write_uncertain`.
 
 No bulk clear, order placement or payment tools. A standalone server still validates arguments, scopes sessions and serializes writes; Korikone's approval system is not a substitute for safe server behavior.
 

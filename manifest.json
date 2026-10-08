@@ -1,0 +1,62 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/schemas/mcpb-manifest-v0.3.schema.json",
+  "manifest_version": "0.3",
+  "name": "s-kaupat-mcp",
+  "display_name": "S-kaupat",
+  "version": "0.3.0",
+  "description": "Find S-kaupat stores, search groceries and fill your S-kaupat shopping lists.",
+  "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others), search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. You finish on the S-kaupat site by pressing \"Lisää kaikki ostoskoriin\" on the list and checking out; this extension never places orders or touches payment.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 10 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
+  "author": {
+    "name": "Vkuparin",
+    "url": "https://github.com/Vkuparin"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Vkuparin/s-kaupat-mcp"
+  },
+  "homepage": "https://github.com/Vkuparin/s-kaupat-mcp",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "SKAUPAT_DEMO": "${user_config.demo_mode}"
+      }
+    }
+  },
+  "tools": [
+    { "name": "search_stores", "description": "Find S-kaupat stores by name, city or postal code, with today's opening hours." },
+    { "name": "select_store", "description": "Remember the user's store for product searches and lists." },
+    { "name": "get_selected_store", "description": "The user's chosen store with opening hours." },
+    { "name": "search_products", "description": "Search products and prices in the user's store." },
+    { "name": "get_products", "description": "Current prices for exact products by barcode." },
+    { "name": "get_product_details", "description": "Ingredients, allergens and nutrition for one product." },
+    { "name": "list_categories", "description": "The store's product categories." },
+    { "name": "browse_category", "description": "Products in one category." },
+    { "name": "login_status", "description": "Whether the user is logged in to S-kaupat." },
+    { "name": "start_login", "description": "Open the S-kaupat login window when the user asks to log in." },
+    { "name": "get_shopping_lists", "description": "The user's S-kaupat shopping lists with prices." },
+    { "name": "get_shopping_list", "description": "One shopping list with prices and an estimated total." },
+    { "name": "create_shopping_list", "description": "Create a shopping list, optionally with products." },
+    { "name": "add_to_shopping_list", "description": "Put products on a shopping list and report what was added." },
+    { "name": "remove_from_shopping_list", "description": "Take products off a shopping list." },
+    { "name": "delete_shopping_list", "description": "Delete a whole shopping list when the user asks." }
+  ],
+  "user_config": {
+    "demo_mode": {
+      "type": "boolean",
+      "title": "Demo mode",
+      "description": "Use built-in sample stores and products instead of S-kaupat. Nothing is sent to S-kaupat and no login is needed.",
+      "default": false,
+      "required": false
+    }
+  },
+  "keywords": ["s-kaupat", "groceries", "shopping list", "prisma", "s-market", "alepa", "finland"],
+  "license": "UNLICENSED",
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "runtimes": { "node": ">=20.0.0" }
+  }
+}

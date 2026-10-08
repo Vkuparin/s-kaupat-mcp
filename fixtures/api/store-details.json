@@ -1,0 +1,148 @@
+{
+  "_note": "Captured live from api.s-kaupat.fi on 2026-10-07 (docs/samples), trimmed. Used by tests as the live response shape. Shape of RemoteStores (aliased store(id) lookups): s0 = Prisma Hämeenkatu, s1 = Prisma Kaleva, s2 = null, assumed to be what an unknown ID returns (not observed live).",
+  "data": {
+    "s0": {
+      "id": "726413330",
+      "name": "Prisma Hämeenkatu Tampere",
+      "weeklyOpeningHours": [
+        {
+          "weekNumber": 41,
+          "openingTimes": [
+            {
+              "date": "2026-10-05",
+              "day": "MON",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "06:00",
+                  "close": "00:00"
+                }
+              ]
+            },
+            {
+              "date": "2026-10-06",
+              "day": "TUE",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "06:00",
+                  "close": "00:00"
+                }
+              ]
+            },
+            {
+              "date": "2026-10-07",
+              "day": "WED",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "06:00",
+                  "close": "00:00"
+                }
+              ]
+            },
+            {
+              "date": "2026-10-08",
+              "day": "THU",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "06:00",
+                  "close": "00:00"
+                }
+              ]
+            },
+            {
+              "date": "2026-10-09",
+              "day": "FRI",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "06:00",
+                  "close": "00:00"
+                }
+              ]
+            },
+            {
+              "date": "2026-10-10",
+              "day": "SAT",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "07:00",
+                  "close": "00:00"
+                }
+              ]
+            },
+            {
+              "date": "2026-10-11",
+              "day": "SUN",
+              "mode": "RANGE",
+              "ranges": [
+                {
+                  "open": "09:00",
+                  "close": "00:00"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "s1": {
+      "id": "517609418",
+      "name": "Prisma Kaleva",
+      "brand": "prisma",
+      "weeklyOpeningHours": [
+        {
+          "weekNumber": 41,
+          "openingTimes": [
+            {
+              "date": "2026-10-05",
+              "day": "MON",
+              "mode": "ALL_DAY",
+              "ranges": null
+            },
+            {
+              "date": "2026-10-06",
+              "day": "TUE",
+              "mode": "ALL_DAY",
+              "ranges": null
+            },
+            {
+              "date": "2026-10-07",
+              "day": "WED",
+              "mode": "ALL_DAY",
+              "ranges": null
+            },
+            {
+              "date": "2026-10-08",
+              "day": "THU",
+              "mode": "ALL_DAY",
+              "ranges": null
+            },
+            {
+              "date": "2026-10-09",
+              "day": "FRI",
+              "mode": "ALL_DAY",
+              "ranges": null
+            },
+            {
+              "date": "2026-10-10",
+              "day": "SAT",
+              "mode": "ALL_DAY",
+              "ranges": null
+            },
+            {
+              "date": "2026-10-11",
+              "day": "SUN",
+              "mode": "ALL_DAY",
+              "ranges": null
+            }
+          ]
+        }
+      ]
+    },
+    "s2": null
+  }
+}

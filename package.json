@@ -1,6 +1,6 @@
 {
   "name": "s-kaupat-mcp",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "MCP server for the S-kaupat.fi grocery store",
   "type": "module",
   "bin": {
@@ -13,7 +13,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "npm run build && node --test dist/test/*.test.js",
-    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "pack:extension": "node scripts/pack-extension.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -22,9 +23,11 @@
   "private": true,
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "playwright-core": "^1.56.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@types/node": "^22.20.5",
     "typescript": "^5.9.3"
   }

@@ -42,7 +42,7 @@ export const SERVER_INSTRUCTIONS = [
   "2. Search with search_products (queries in Finnish work best, e.g. 'maito', 'ruisleipä') or browse with list_categories and browse_category.",
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
-  "5. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin', check out. These tools never place orders or pay.",
+  "5. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the first time the site asks for the store and pickup or delivery), check out. These tools never place orders or pay.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
 
@@ -371,6 +371,10 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       run("browse_category", () => client.browseCategory({ storeId: resolveStoreId(storeId), slug, limit, offset, sort })),
   );
 
+  const storeNameFor = (id: string): string | null => {
+    const saved = selection.get();
+    return saved?.id === id ? saved.name : seenStores.get(id)?.name ?? null;
+  };
   const withToken: WithToken = (fn) => (auth.withAccessToken ? auth.withAccessToken(fn) : auth.getAccessToken().then(fn));
   const requireLists = (): ShoppingListApi => {
     if (!options.lists) throw new SKaupatError("unsupported", "Shopping lists are not available in this server.");
@@ -481,7 +485,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
             };
           },
         );
-        return listWriteView(result);
+        return listWriteView(result, storeNameFor(store));
       }),
   );
 
@@ -506,7 +510,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const store = resolveStoreId(storeId);
         const lists = requireLists();
         const list = await getListOrThrow(listId, store);
-        return listWriteView(await addItemsToList({ client, lists, withToken, storeId: store, list, items }));
+        return listWriteView(await addItemsToList({ client, lists, withToken, storeId: store, list, items }), storeNameFor(store));
       }),
   );
 
@@ -595,11 +599,23 @@ function categoryView(c: Category, depth: number): CategoryView {
   };
 }
 
-/** Where the user finishes: the site turns a list into a cart with one button. */
-const LIST_NEXT_STEP = {
-  fi: "Avaa ostoslista S-kaupat-sivulla ja paina \"Lisää kaikki ostoskoriin\". Tilaus vahvistetaan sivulla.",
-  en: "Open the list on the S-kaupat site and press \"Lisää kaikki ostoskoriin\" (add all to cart), then check out there.",
-};
+/**
+ * Where the user finishes: the site turns a list into a cart with one button. The site keeps its own
+ * store choice in the browser, so the first time it asks for a store and a delivery method before
+ * the button works (seen live 2026-10-08).
+ */
+function listNextStep(storeName: string | null) {
+  const fiStore = storeName ? `kaupaksi ${storeName}` : "kauppasi";
+  const enStore = storeName ? `${storeName} as the store` : "your store";
+  return {
+    fi:
+      "Avaa ostoslista S-kaupat-sivulla ja paina \"Lisää kaikki ostoskoriin\". Jos sivu kysyy, valitse " +
+      `${fiStore} sekä nouto tai kotiinkuljetus. Tilaus vahvistetaan sivulla.`,
+    en:
+      "Open the list on the S-kaupat site and press \"Lisää kaikki ostoskoriin\" (add all to cart). If the site " +
+      `asks, choose ${enStore} and pickup or home delivery. Then check out there.`,
+  };
+}
 
 function listView(list: ShoppingList) {
   let amount = 0;
@@ -618,7 +634,7 @@ function listView(list: ShoppingList) {
   };
 }
 
-function listWriteView({ list, results }: ListWriteResult) {
+function listWriteView({ list, results }: ListWriteResult, storeName: string | null) {
   const count = (status: string) => results.filter((r) => r.status === status).length;
   return {
     list: listView(list),
@@ -634,7 +650,7 @@ function listWriteView({ list, results }: ListWriteResult) {
       uncertain: count("uncertain"),
       withWarnings: results.filter((r) => "warning" in r && r.warning).length,
     },
-    nextStep: LIST_NEXT_STEP,
+    nextStep: listNextStep(storeName),
   };
 }
 

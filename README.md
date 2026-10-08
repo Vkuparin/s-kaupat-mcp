@@ -107,7 +107,7 @@ Not yet checked against the live site: which localStorage entry the site keeps i
 S-kaupat has no server-side cart: the website keeps the cart in the browser. Shopping lists are kept on the user's S-kaupat account, and each list on the site has a **Lisää kaikki ostoskoriin** (add all to cart) button. So the flow is:
 
 1. The app (or Claude) fills a list with `create_shopping_list` or `add_to_shopping_list`.
-2. The user opens the list on the S-kaupat site or app, presses *Lisää kaikki ostoskoriin* and checks out there. Every list write returns this as `nextStep` in Finnish and English. The server never places orders or touches payment.
+2. The user opens the list on the S-kaupat site or app, presses *Lisää kaikki ostoskoriin* and checks out there. The first time, the site asks for the store and pickup or home delivery before it fills the cart (the site keeps its own store choice). Every list write returns this as `nextStep` in Finnish and English. The server never places orders or touches payment.
 
 Each item is `{ productId, quantity, allowSubstitutes }`. `quantity` is pieces, or kilograms for products sold by weight. `allowSubstitutes` (default `true`) lets the store pick a similar product if this one is out of stock. A product already on the list gets the new quantity rather than a second row. Prices are from the user's selected store.
 

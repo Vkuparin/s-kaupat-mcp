@@ -343,3 +343,11 @@ test("a new list is returned even if no product could be written", async () => {
   assert.equal(result.list.id, list.id);
   assert.equal(result.results[0]?.status, "missing");
 });
+
+test("the next step names the user's store, which the site asks for before filling the cart", async () => {
+  const mcp = await loggedIn();
+  const { data } = await call(mcp, "create_shopping_list", { name: "Kauppa", items: [{ productId: MILK }] });
+  const store = (await call(mcp, "get_selected_store")).data.selectedStore.name;
+  assert.ok(data.nextStep.fi.includes(store));
+  assert.ok(data.nextStep.en.includes(store));
+});

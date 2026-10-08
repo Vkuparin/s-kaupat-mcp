@@ -38,7 +38,7 @@ Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 - [x] Create a list with products: every result says `added` (2026-10-08, 2 products).
 - [x] Add the same product again with a new quantity: `updated`, one row with the new quantity (2026-10-08, list Testi). Still to check: the site shows the same.
 - [ ] Remove one product; delete the list.
-- [ ] On s-kaupat.fi, "Lisää kaikki ostoskoriin" puts a list's products in the cart.
+- [ ] On s-kaupat.fi, "Lisää kaikki ostoskoriin" puts a list's products in the cart. (2026-10-08: the list showed correctly on the site; the button first asked for a store/delivery location. 0.4.2 says so in `nextStep`. Recheck that the products land in the cart after picking it.)
 
 ## 8. Two apps at once
 - [ ] With two apps running the server, the second one gets `browser_busy` while the first one's window is open, and works after it closes.

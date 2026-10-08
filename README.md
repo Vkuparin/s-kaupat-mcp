@@ -171,6 +171,8 @@ Try it interactively with the MCP Inspector:
 npm run inspect
 ```
 
+What still needs a real PC and account (login, the browser window, live lists) is listed in [docs/interactive-tests.md](docs/interactive-tests.md).
+
 ### Claude Desktop from a checkout (developers)
 
 Instead of the extension, you can point Claude Desktop at a checkout: Settings → Developer → Edit Config, then add the server to `claude_desktop_config.json` with the absolute path to `dist/index.js`:

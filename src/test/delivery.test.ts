@@ -437,7 +437,7 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
     ),
   });
   const [address] = await client.findAddresses('Testikatu "1"');
-  assert.match(sent[0].query, /addressAutosuggest\(query: "Testikatu \\"1\\"", searchContext: DELIVERY_METHOD_SELECTION\)/);
+  assert.match(sent[0].query, /addressAutosuggest\(countryCode: "FI", query: "Testikatu \\"1\\"", searchContext: DELIVERY_METHOD_SELECTION\)/);
   assert.equal(address!.postalCode, "00930");
   const location = { postalCode: address!.postalCode!, latitude: address!.latitude!, longitude: address!.longitude! };
 
@@ -456,7 +456,7 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
   );
 
   const places = await client.getPickupPlacesNear(location, "2099-10-09", 8);
-  assert.match(sent[3].query, /pickupSlotsForCoordinates\(startDate: "2099-10-09", endDate: "2099-10-09", location: \{ latitude: 60.2, longitude: 25.08 \}, limit: 8\)/);
+  assert.match(sent[3].query, /pickupSlotsForCoordinates\(startDate: "2099-10-09", endDate: "2099-10-09", closeToCoordinates: \{ latitude: 60.2, longitude: 25.08 \}, limit: 8\)/);
   assert.equal(places.length, 1);
   const place = places[0]!;
   assert.equal(place.distance, 3100);

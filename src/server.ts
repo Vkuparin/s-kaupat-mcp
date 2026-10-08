@@ -673,7 +673,17 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         if (location) {
           const api = requireDelivery();
           const day = date ?? finnishDate(now());
-          const [methods, places] = await Promise.all([api.getDeliveryMethods(location), api.getPickupPlacesNear(location, day, 8)]);
+          // Either half is useful alone; fail only when both fail.
+          const [methodsResult, placesResult] = await Promise.allSettled([
+            api.getDeliveryMethods(location),
+            api.getPickupPlacesNear(location, day, 8),
+          ]);
+          if (methodsResult.status === "rejected" && placesResult.status === "rejected") throw placesResult.reason;
+          for (const r of [methodsResult, placesResult]) {
+            if (r.status === "rejected") log.warn("Part of the delivery options failed", { message: String(r.reason?.message ?? r.reason) });
+          }
+          const methods = methodsResult.status === "fulfilled" ? methodsResult.value : [];
+          const places = placesResult.status === "fulfilled" ? placesResult.value : [];
           const options = places.map((p) => ({ ...p.area, distance: p.distance, freeTimesOnDate: p.slots.filter((x) => x.status === "available").length }));
           return {
             location: { postalCode: location.postalCode },
@@ -681,6 +691,9 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
             selectedAreaId: selection.getDelivery()?.area.areaId ?? null,
             methods,
             options,
+            ...(methodsResult.status === "rejected" || placesResult.status === "rejected"
+              ? { partial: { methods: methodsResult.status === "rejected", pickupPlaces: placesResult.status === "rejected" } }
+              : {}),
             siteOnlyMethods: methods.filter((m) => m.method !== "pickup" && m.available !== false).map((m) => m.method),
           };
         }

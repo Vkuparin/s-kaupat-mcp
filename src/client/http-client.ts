@@ -142,7 +142,7 @@ const SLOT_FIELDS = "slotId areaId isClosed availability startDateTime endDateTi
  * into the query text as literals, already validated, so no S-kaupat type names are needed.
  */
 function addressSearchQuery(text: string): string {
-  return `query AddressSearch { addressAutosuggest(query: ${JSON.stringify(text)}, searchContext: DELIVERY_METHOD_SELECTION) {
+  return `query AddressSearch { addressAutosuggest(countryCode: "FI", query: ${JSON.stringify(text)}, searchContext: DELIVERY_METHOD_SELECTION) {
     id title streetAddress postalCode city latitude longitude resultType } }`;
 }
 
@@ -163,7 +163,7 @@ function deliveryMethodsQuery(l: DeliveryLocation, fragments: { typename: string
 }
 
 function nearbyPickupQuery(l: DeliveryLocation, date: string, limit: number): string {
-  return `query NearbyPickup { pickupSlotsForCoordinates(startDate: ${JSON.stringify(date)}, endDate: ${JSON.stringify(date)}, location: ${locationLiteral(l)}, limit: ${Math.trunc(limit)}) {
+  return `query NearbyPickup { pickupSlotsForCoordinates(startDate: ${JSON.stringify(date)}, endDate: ${JSON.stringify(date)}, closeToCoordinates: ${locationLiteral(l)}, limit: ${Math.trunc(limit)}) {
     slotsInPickupPoints { distance store { id brand name } pickupPoint { id name description address { street city postalCode } }
       slots { id price closingTime deliveryTimeStart deliveryTimeEnd isAlcoholSellingAllowed } } } }`;
 }
@@ -857,7 +857,8 @@ function mapProduct(p: z.infer<typeof ApiProductSchema>, storeId: string, observ
 
 async function safeText(response: Response): Promise<string> {
   try {
-    return (await response.text()).slice(0, 500);
+    // Validation errors name the field S-kaupat rejected; keep enough to see all of them.
+    return (await response.text()).slice(0, 2000);
   } catch {
     return "";
   }

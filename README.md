@@ -6,7 +6,7 @@ Status: **early (v0.5.0)**. Catalogue, store-selection, login and shopping list 
 
 ## Get it
 
-- **For your own app:** ship the standalone `s-kaupat-mcp.exe` (Node.js inside, nothing else to install), the single-file `s-kaupat-mcp.cjs`, or the npm package with its library API. See [docs/embedding.md](docs/embedding.md) for packaging and settings, and [docs/caller-guide.md](docs/caller-guide.md) for the user experience.
+- **For your own app:** ship the standalone `s-kaupat-mcp.exe` (Node.js inside, nothing else to install), the single-file `s-kaupat-mcp.cjs`, or the npm package with its library API. It runs over stdio or, for apps that can't use stdio, over local HTTP with an access key. See [docs/embedding.md](docs/embedding.md) for packaging and settings, and [docs/caller-guide.md](docs/caller-guide.md) for the user experience.
 - **For Claude Desktop:** the one-click extension, see [Install in Claude Desktop](#install-in-claude-desktop-one-click).
 
 All of these are built by the Release workflow in GitHub Actions.
@@ -237,6 +237,7 @@ src/
   lib.ts                 library entry point for apps embedding the server
   config.ts              settings from flags, environment and config file
   runtime.ts             builds the live or demo server from the settings
+  http.ts                optional local HTTP endpoint with an access key
   demo/catalogue.ts      built-in sample catalogue for demo mode and tests
   server.ts              MCP tool definitions and error mapping
   errors.ts              stable error codes and their Finnish and English messages

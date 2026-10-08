@@ -28,6 +28,12 @@ export interface SKaupatConfig {
   demoCatalogueFile: string | null;
   /** Log every API request to stderr (never tokens). */
   debug: boolean;
+  /** Serve MCP over HTTP on this port instead of stdio (null: stdio). 0 picks a free port. */
+  httpPort: number | null;
+  /** Address the HTTP server listens on. Loopback only unless the app really needs otherwise. */
+  httpHost: string;
+  /** Key every HTTP request must send as "Authorization: Bearer <key>". Required with httpPort. */
+  accessKey: string | null;
 }
 
 /** Names of the environment variables, for the docs and error messages. */
@@ -44,7 +50,13 @@ export const ENV = {
   loginUrl: "SKAUPAT_LOGIN_URL",
   demoCatalogueFile: "SKAUPAT_FIXTURES",
   debug: "SKAUPAT_DEBUG",
+  httpPort: "SKAUPAT_HTTP_PORT",
+  httpHost: "SKAUPAT_HTTP_HOST",
+  accessKey: "SKAUPAT_ACCESS_KEY",
 } as const;
+
+/** Shortest access key accepted for the HTTP server. */
+export const MIN_ACCESS_KEY_LENGTH = 24;
 
 export class ConfigError extends Error {
   override name = "ConfigError";
@@ -91,7 +103,21 @@ export function loadConfig(options: LoadConfigOptions = {}): { config: SKaupatCo
     loginUrl: merged.loginUrl ?? null,
     demoCatalogueFile: merged.demoCatalogueFile ?? null,
     debug: merged.debug ?? false,
+    httpPort: merged.httpPort ?? null,
+    httpHost: merged.httpHost ?? "127.0.0.1",
+    accessKey: merged.accessKey ?? null,
   };
+  if (config.httpPort !== null) {
+    if (!config.accessKey) {
+      throw new ConfigError(
+        `The HTTP server needs an access key: set ${ENV.accessKey} or "accessKey" in the config file ` +
+          `(at least ${MIN_ACCESS_KEY_LENGTH} random characters). It is not a command-line flag, so it stays out of process lists.`,
+      );
+    }
+    if (config.accessKey.length < MIN_ACCESS_KEY_LENGTH) {
+      throw new ConfigError(`The access key must be at least ${MIN_ACCESS_KEY_LENGTH} characters.`);
+    }
+  }
   return { config, cli };
 }
 
@@ -108,6 +134,9 @@ function envValues(env: Env): Partial_ {
   if (env[ENV.loginUrl]) out.loginUrl = env[ENV.loginUrl]!;
   if (env[ENV.demoCatalogueFile]) out.demoCatalogueFile = env[ENV.demoCatalogueFile]!;
   if (env[ENV.debug]) out.debug = env[ENV.debug] === "1" || env[ENV.debug] === "true";
+  if (env[ENV.httpPort]) out.httpPort = parsePort(env[ENV.httpPort]!, ENV.httpPort);
+  if (env[ENV.httpHost]) out.httpHost = env[ENV.httpHost]!;
+  if (env[ENV.accessKey]) out.accessKey = env[ENV.accessKey]!;
   return out;
 }
 
@@ -136,7 +165,12 @@ function readConfigFile(path: string): Partial_ {
         if (typeof value !== "boolean") throw new ConfigError(`${where(key)} must be true or false.`);
         out.debug = value;
         break;
+      case "httpPort":
+        out.httpPort = parsePort(String(value), where(key));
+        break;
       case "dataDir":
+      case "httpHost":
+      case "accessKey":
       case "settingsFile":
       case "tokenFile":
       case "browserPath":
@@ -154,13 +188,16 @@ function readConfigFile(path: string): Partial_ {
 
 const USAGE = `Usage: s-kaupat-mcp [options]
 
-Runs the S-kaupat MCP server on stdio.
+Runs the S-kaupat MCP server on stdio, or on local HTTP with --http-port.
 
 Options:
   --config <file>     JSON config file (or ${ENV.config})
   --demo              Built-in sample data, no network or account (or ${ENV.mode}=demo)
   --data-dir <dir>    Folder for the browser profile and login (or ${ENV.dataDir})
   --transport <name>  browser (default) or direct (or ${ENV.transport})
+  --http-port <port>  Serve MCP over HTTP at http://127.0.0.1:<port>/mcp instead of stdio
+                      (needs ${ENV.accessKey}; or ${ENV.httpPort})
+  --http-host <addr>  Address to listen on (default 127.0.0.1)
   --debug             Log each API request to stderr
   --version           Print the version
   --help              Print this help
@@ -199,6 +236,12 @@ function parseArgs(argv: string[]): { values: Partial_; cli: CliOptions; configF
       case "--debug":
         values.debug = true;
         break;
+      case "--http-port":
+        values.httpPort = parsePort(next(), name);
+        break;
+      case "--http-host":
+        values.httpHost = next();
+        break;
       case "--version":
       case "-v":
         cli.version = true;
@@ -212,6 +255,12 @@ function parseArgs(argv: string[]): { values: Partial_; cli: CliOptions; configF
     }
   }
   return { values, cli, configFile };
+}
+
+function parsePort(value: string, where: string): number {
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) throw new ConfigError(`${where} must be a port number, not "${value}".`);
+  return port;
 }
 
 function parseMode(value: string, where: string): SKaupatConfig["mode"] {

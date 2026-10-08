@@ -36,6 +36,22 @@ await client.connect(transport);
 const status = await client.callTool({ name: "get_setup_status", arguments: {} });
 ```
 
+## Or over local HTTP
+
+For apps that can't use stdio, the server can serve MCP over [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports#streamable-http) on the user's own PC:
+
+```text
+set SKAUPAT_ACCESS_KEY=<at least 24 random characters your app generates and keeps>
+s-kaupat-mcp.exe --http-port 8717 --data-dir "%LOCALAPPDATA%\MyApp\s-kaupat"
+```
+
+- The endpoint is `http://127.0.0.1:8717/mcp`. Every request needs `Authorization: Bearer <access key>`. The key is separate from the S-kaupat login, which never leaves the server. It is read only from the environment or the config file, never from a flag, so it doesn't show up in process lists.
+- It listens on `127.0.0.1` only. Requests must be addressed to localhost, and requests a web page sends from another site are refused, so a website the user visits can't reach it.
+- It is stateless: send `POST` requests; no session is kept between them. The login, the browser window and the store choice still carry over, because they belong to the running server.
+- `--http-port 0` picks a free port; the server logs the URL on stderr.
+
+A Node app can do the same in-process with `startHttpServer(runtime, { host, port, accessKey })`.
+
 ## Or run it inside your Node app
 
 ```ts
@@ -73,6 +89,9 @@ Each setting comes from, highest first: a command-line flag, an environment vari
 | `loginUrl` | `SKAUPAT_LOGIN_URL` | | `https://www.s-kaupat.fi/` | Page the login window opens |
 | `demoCatalogueFile` | `SKAUPAT_FIXTURES` | | built in | A JSON catalogue for demo mode |
 | `debug` | `SKAUPAT_DEBUG` (`1`) | `--debug` | off | Log each API request to stderr (never tokens) |
+| `httpPort` | `SKAUPAT_HTTP_PORT` | `--http-port` | none (stdio) | Serve MCP over HTTP on this port instead of stdio |
+| `httpHost` | `SKAUPAT_HTTP_HOST` | `--http-host` | `127.0.0.1` | Address to listen on |
+| `accessKey` | `SKAUPAT_ACCESS_KEY` | | none | Required with `httpPort`, at least 24 characters |
 
 Example `config.json`:
 

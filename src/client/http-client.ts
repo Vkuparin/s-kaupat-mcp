@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isProductUnavailableError, SKaupatError, storeNotFound } from "../errors.js";
+import { isProductUnavailableError, listNotFound, SKaupatError, storeNotFound } from "../errors.js";
 import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi, ShoppingListItem } from "../lists/types.js";
@@ -419,7 +419,12 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
   }
 
   async getList(accessToken: string, listId: string, storeId: string): Promise<ShoppingList | null> {
-    const data = await this.listCall("RemoteGetUserListById", LIST_QUERIES.getList, { id: listId, storeId }, accessToken);
+    const data = await this.listCall("RemoteGetUserListById", LIST_QUERIES.getList, { id: listId, storeId }, accessToken).catch(
+      (err: unknown) => {
+        if (err instanceof SKaupatError && err.code === "list_not_found") return { shoppingList: null };
+        throw err;
+      },
+    );
     const list = ApiListSchema.nullish().parse(data.shoppingList);
     return list ? mapList(list, storeId) : null;
   }
@@ -460,7 +465,17 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
     variables: Record<string, unknown>,
     accessToken: string,
   ): Promise<Record<string, unknown>> {
-    const raw = (await this.post(operationName, query, variables, accessToken)) as { data?: Record<string, unknown> | null };
+    let raw: { data?: Record<string, unknown> | null };
+    try {
+      raw = (await this.post(operationName, query, variables, accessToken)) as typeof raw;
+    } catch (err) {
+      // A list deleted elsewhere (e.g. on the site) comes back as a GraphQL "Not Found" error (live 2026-10-08).
+      const listId = variables.shoppingListId ?? variables.id;
+      if (err instanceof SKaupatError && err.code === "upstream_error" && typeof listId === "string" && /not found/i.test(err.message)) {
+        throw listNotFound(listId);
+      }
+      throw err;
+    }
     return raw.data ?? {};
   }
 

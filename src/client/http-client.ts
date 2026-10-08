@@ -135,6 +135,9 @@ const LIST_QUERIES = {
 /** GraphQL error codes that mean the access token was not accepted. */
 const AUTH_ERROR_CODES = ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"];
 
+/** A price-sorted search orders this many of the most relevant matches. */
+export const PRICE_SORT_POOL = 50;
+
 const SORTS: Record<ProductSort, { orderBy?: string; order?: string }> = {
   relevance: {},
   price_asc: { orderBy: "price", order: "asc" },
@@ -275,11 +278,33 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
   }
 
   async searchProducts({ storeId, query, limit, offset = 0, sort = "relevance" }: SearchProductsInput): Promise<ProductSearchResult> {
+    if (sort !== "relevance") {
+      // S-kaupat's own price sort ranks every loose text match ("maito" -> yeast, margarine,
+      // lollipops), so a price sort reorders only the most relevant matches.
+      const { products, total, observedAt } = await this.listProducts(storeId, "RemoteFilteredProducts", PRODUCT_LIST_QUERY, {
+        queryString: query,
+        from: 0,
+        limit: PRICE_SORT_POOL,
+      });
+      const sign = sort === "price_asc" ? 1 : -1;
+      const sorted = products
+        .filter((p) => p.price != null)
+        .sort((a, b) => sign * (a.price! - b.price!))
+        .concat(products.filter((p) => p.price == null));
+      return {
+        storeId,
+        query,
+        total: total == null ? sorted.length : Math.min(total, sorted.length),
+        offset,
+        sort,
+        products: sorted.slice(offset, offset + limit),
+        observedAt,
+      };
+    }
     const { products, total, observedAt } = await this.listProducts(storeId, "RemoteFilteredProducts", PRODUCT_LIST_QUERY, {
       queryString: query,
       from: offset,
       limit,
-      ...SORTS[sort],
     });
     return { storeId, query, total, offset, sort, products, observedAt };
   }

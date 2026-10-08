@@ -79,7 +79,9 @@ test("create_shopping_list reports what was added, flagged and missing", async (
   assert.equal(milk.status, "added");
   assert.equal(milk.item.quantity, 2);
   assert.equal(milk.item.allowSubstitutes, true);
-  assert.equal(milk.item.product.price, 1.09);
+  // The result names the row; the product with its price is in list.items.
+  assert.equal(milk.item.product, undefined);
+  assert.equal(data.list.items.find((i: any) => i.itemId === milk.item.itemId).product.price, 1.09);
   assert.equal(yogurt.status, "added");
   assert.equal(yogurt.item.allowSubstitutes, false);
   assert.equal(yogurt.warning.code, "product_unavailable");
@@ -340,4 +342,12 @@ test("a new list is returned even if no product could be written", async () => {
   });
   assert.equal(result.list.id, list.id);
   assert.equal(result.results[0]?.status, "missing");
+});
+
+test("the next step names the user's store, which the site asks for before filling the cart", async () => {
+  const mcp = await loggedIn();
+  const { data } = await call(mcp, "create_shopping_list", { name: "Kauppa", items: [{ productId: MILK }] });
+  const store = (await call(mcp, "get_selected_store")).data.selectedStore.name;
+  assert.ok(data.nextStep.fi.includes(store));
+  assert.ok(data.nextStep.en.includes(store));
 });

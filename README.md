@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.4.1)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.4.2)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Tools
 
@@ -61,7 +61,7 @@ Every result carries `schemaVersion`. Failures come back as MCP tool errors (`is
 
 ```json
 {
-  "schemaVersion": "0.2",
+  "schemaVersion": "0.3",
   "error": {
     "code": "login_required",
     "action": "log_in",
@@ -107,7 +107,7 @@ Not yet checked against the live site: which localStorage entry the site keeps i
 S-kaupat has no server-side cart: the website keeps the cart in the browser. Shopping lists are kept on the user's S-kaupat account, and each list on the site has a **Lisää kaikki ostoskoriin** (add all to cart) button. So the flow is:
 
 1. The app (or Claude) fills a list with `create_shopping_list` or `add_to_shopping_list`.
-2. The user opens the list on the S-kaupat site or app, presses *Lisää kaikki ostoskoriin* and checks out there. Every list write returns this as `nextStep` in Finnish and English. The server never places orders or touches payment.
+2. The user opens the list on the S-kaupat site or app, presses *Lisää kaikki ostoskoriin* and checks out there. The first time, the site asks for the store and pickup or home delivery before it fills the cart (the site keeps its own store choice). Every list write returns this as `nextStep` in Finnish and English. The server never places orders or touches payment.
 
 Each item is `{ productId, quantity, allowSubstitutes }`. `quantity` is pieces, or kilograms for products sold by weight. `allowSubstitutes` (default `true`) lets the store pick a similar product if this one is out of stock. A product already on the list gets the new quantity rather than a second row. Prices are from the user's selected store.
 
@@ -128,7 +128,7 @@ A list write returns one result per requested product, so the app can show exact
 }
 ```
 
-- `added` / `updated` / `unchanged`: the product is on the list as requested. A `warning` means S-kaupat's cart check says it can't be ordered right now; it is still on the list, and `allowSubstitutes` decides what the store does.
+- `added` / `updated` / `unchanged`: the product is on the list as requested. `item` names the list row (`itemId`, `name`, `quantity`, `allowSubstitutes`); the full product with its price is in `list.items`. A `warning` means S-kaupat's cart check says it can't be ordered right now; it is still on the list, and `allowSubstitutes` decides what the store does.
 - `missing`: not written. `reason` is `unknown_barcode`, `not_sold_in_store`, `no_internal_id` or `write_failed` (then `code` says why, e.g. `session_expired`).
 - `uncertain`: S-kaupat did not confirm the write and re-reading the list didn't settle it; ask the user to check the list.
 - `estimatedTotal` is in euros at current shelf prices; `complete` is `false` when a price is missing or approximate (weighed goods).

@@ -63,20 +63,26 @@ test("product search posts its own query and maps the captured sample", async ()
   });
 });
 
-test("product search sends paging and price sort", async () => {
+test("product search sends paging", async () => {
   const bodies: any[] = [];
   const client = new HttpSKaupatClient({ fetchImpl: fakeFetch(docSample("product-search.json"), 200, [], bodies) });
-  const res = await client.searchProducts({ storeId: "1", query: "maito", limit: 3, offset: 3, sort: "price_desc" });
-  assert.deepEqual(bodies[0].variables, {
-    storeId: "1",
-    queryString: "maito",
-    from: 3,
-    limit: 3,
-    orderBy: "price",
-    order: "desc",
-  });
+  const res = await client.searchProducts({ storeId: "1", query: "maito", limit: 3, offset: 3 });
+  assert.deepEqual(bodies[0].variables, { storeId: "1", queryString: "maito", from: 3, limit: 3 });
   assert.equal(res.offset, 3);
-  assert.equal(res.sort, "price_desc");
+});
+
+test("a price-sorted search reorders the most relevant matches, not every loose match", async () => {
+  // Live 2026-10-08: S-kaupat's own price sort for "maito" put yeast and margarine first.
+  const bodies: any[] = [];
+  const client = new HttpSKaupatClient({ fetchImpl: fakeFetch(docSample("product-search.json"), 200, [], bodies) });
+  const res = await client.searchProducts({ storeId: "1", query: "maito", limit: 2, offset: 1, sort: "price_asc" });
+  assert.deepEqual(bodies[0].variables, { storeId: "1", queryString: "maito", from: 0, limit: 50 });
+  const all = await client.searchProducts({ storeId: "1", query: "maito", limit: 50, sort: "price_asc" });
+  const prices = all.products.map((p) => p.price).filter((p) => p != null) as number[];
+  assert.deepEqual(prices, [...prices].sort((a, b) => a - b));
+  assert.deepEqual(res.products.map((p) => p.id), all.products.slice(1, 3).map((p) => p.id));
+  assert.equal(res.sort, "price_asc");
+  assert.ok((res.total ?? 0) <= 50);
 });
 
 test("an unknown store in product search is store_not_found", async () => {

@@ -15,7 +15,7 @@ Call `get_setup_status` when the app starts.
 
 ```json
 {
-  "schemaVersion": "0.2",
+  "schemaVersion": "0.3",
   "mode": "live",
   "store": null,
   "login": { "status": "logged_out", "displayName": null },
@@ -76,7 +76,7 @@ The result has one entry per product. Show it as a short checklist:
 
 `summary` has the counts for a one-line answer ("5 products added, 1 not available in this store"). `list.estimatedTotal` is the total at shelf prices; when `complete` is `false`, say "about".
 
-Then show `nextStep` in the user's language: the user opens the list on the S-kaupat site or app, presses **Lisää kaikki ostoskoriin** (add all to cart) and checks out there.
+Then show `nextStep` in the user's language: the user opens the list on the S-kaupat site or app, presses **Lisää kaikki ostoskoriin** (add all to cart) and checks out there. The site keeps its own store choice, so the first time it asks the user to pick the store and pickup or home delivery before the products go to the cart; `nextStep` says so and names the store chosen here.
 
 ## 6. Errors
 
@@ -84,7 +84,7 @@ Every failure looks like this:
 
 ```json
 {
-  "schemaVersion": "0.2",
+  "schemaVersion": "0.3",
   "error": {
     "code": "session_expired",
     "action": "log_in",

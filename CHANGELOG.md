@@ -9,6 +9,7 @@ First release candidate for 1.0.0. Nothing in the tools changed shape since 0.12
 - `schemaVersion` is now `1.0` and stays `1.0` for all of 1.x.
 - Licensed under Apache-2.0, so any app may bundle and ship the server.
 - The server's minimised S-kaupat window no longer shows a taskbar button or an Alt+Tab entry on Windows. The login window and pages opened for the user still do.
+- `get_order_items` leaves out fee rows such as the delivery fee, like the site's own "order again" (seen live: fees without a product came back as items).
 - The release workflow marks tags with a suffix (like `v1.0.0-rc.1`) as pre-releases and takes the release notes from this file.
 
 Known limits:

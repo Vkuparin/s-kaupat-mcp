@@ -303,6 +303,8 @@ test("HTTP adapter: an earlier order's products leave out packaging and fees", a
               { ean: "2000818700008", itemCount: "0.5", name: "Banaani", price: 1.99, replace: false, additionalInfo: "kypsiä", product: { productType: "PRODUCT", pricing: { salesUnit: "KG" } } },
               { ean: "6430049370013", itemCount: "1", name: "Pahvilaatikko", price: 0.85, product: { productType: "PACKAGING_MATERIAL" } },
               { ean: "2000000000010", itemCount: "1", name: "Keräilymaksu", price: 1, product: { productType: "SERVICE_FEE" } },
+              { ean: "0200096901209", itemCount: "1", name: "Kotiinkuljetus", price: 2.9, replace: false, product: null },
+              { ean: "6410405082657", itemCount: "1", name: "Maito 1l", price: 1.09, product: { productType: "PRODUCT" } },
             ],
           },
         },

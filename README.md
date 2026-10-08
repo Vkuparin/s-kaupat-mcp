@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.4.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.4.1)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Tools
 
@@ -142,7 +142,7 @@ Not yet checked against the live site: the exact shape of list reads (written fr
 The easiest way is the extension file, `s-kaupat-<version>.mcpb`. It contains everything, including its own copy of the libraries it needs; Claude Desktop runs it with its built-in Node.js.
 
 1. Get the file: download it from the repository's releases, or build it yourself with `npm run pack:extension` (see below).
-2. Double-click the file, or open Claude Desktop → **Settings → Extensions** and drag the file in.
+2. Open Claude Desktop → **Settings → Extensions** and drag the file in (or use **Advanced settings → Install Extension…** and pick it). Double-clicking the file works only on some setups; if nothing happens, use Settings.
 3. Press **Install**. That's it: ask Claude, for example, "Etsi Prisma Tampereelta ja valitse se kaupakseni".
 
 Optional: in the extension's settings, **Demo mode** uses built-in sample stores and products, so you can try it without S-kaupat or a login.

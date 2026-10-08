@@ -11,6 +11,7 @@ import { createBrowserFetch } from "./browser/browser-fetch.js";
 import { BrowserSession } from "./browser/session.js";
 import { HttpCheckoutApi } from "./checkout/http.js";
 import { FileOrderStore, MemoryOrderStore } from "./checkout/order-store.js";
+import { OrderReviews } from "./checkout/reviews.js";
 import type { CheckoutApi } from "./checkout/types.js";
 import { FixtureSKaupatClient } from "./client/fixture-client.js";
 import { DemoCheckout } from "./demo/checkout.js";
@@ -42,6 +43,8 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   const { client, auth, browser, checkout } = config.mode === "demo" ? demoParts(config) : liveParts(config);
   // Demo orders live only in memory (DemoCheckout), so their tokens must not outlive the process either.
   const orders = config.mode === "demo" ? new MemoryOrderStore() : new FileOrderStore(join(config.dataDir, "orders.json"));
+  // One for the whole runtime: over local HTTP each request gets a new MCP server.
+  const reviews = new OrderReviews();
   const site: SiteWindow | undefined = browser
     ? {
         open: (url) => browser.openForUser(url),
@@ -60,6 +63,7 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
         mode: config.mode,
         checkout,
         orders,
+        reviews,
         ordering: config.ordering,
       }),
     close: async () => {

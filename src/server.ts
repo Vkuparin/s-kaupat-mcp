@@ -15,9 +15,10 @@ import { prefillEntries, readSiteChoice, type SitePrefill } from "./browser/site
 import { registerCheckoutTools } from "./checkout/tools.js";
 import type { CheckoutApi } from "./checkout/types.js";
 import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
+import { OrderReviews } from "./checkout/reviews.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.12.1";
+export const SERVER_VERSION = "0.12.2";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -47,6 +48,8 @@ export interface ServerOptions {
   checkout?: CheckoutApi;
   /** Orders placed through this server and their access tokens. Defaults to memory only. */
   orders?: OrderStore;
+  /** Reviews awaiting the user's Order press. Pass the same one to every server of an app. Defaults to this server only. */
+  reviews?: OrderReviews;
   /** false turns place_order off. Default true. */
   ordering?: boolean;
 }
@@ -81,6 +84,7 @@ export const SERVER_INSTRUCTIONS = [
 export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: ServerOptions = {}): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: SERVER_INSTRUCTIONS });
   const selection = options.selection ?? new MemoryStoreSelection();
+  const reviews = options.reviews ?? new OrderReviews();
   const now = options.now ?? (() => new Date());
   /** Stores seen in search results, so select_store can save the address the user saw. */
   const seenStores = new Map<string, Store>();
@@ -328,7 +332,12 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     async () =>
       run("log_out", async () => {
         // The orders go with the login, before the browser part, which may fail and can be pressed again.
-        await auth.logout({ forgetLocal: () => options.orders?.clear() });
+        await auth.logout({
+          forgetLocal: () => {
+            options.orders?.clear();
+            reviews.clear();
+          },
+        });
         return { status: "logged_out" as const, userMessage: { fi: "Olet kirjautunut ulos.", en: "You are logged out." } };
       }),
   );
@@ -1019,6 +1028,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       auth,
       checkout: options.checkout,
       orders: options.orders ?? new MemoryOrderStore(),
+      reviews,
       selection,
       lists: options.lists,
       withToken,

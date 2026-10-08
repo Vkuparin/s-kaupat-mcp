@@ -52,6 +52,32 @@ test("an app can use the server over local HTTP with its access key; state carri
   }
 });
 
+test("an order reviewed in one HTTP request can be placed in the next", async () => {
+  const { http, runtime } = await start();
+  const data = (r: any) => r.structuredContent as any;
+  try {
+    const client = await connect(http.url);
+    await client.callTool({ name: "select_store", arguments: { storeId: "fixture-store-1" } });
+    await client.callTool({ name: "start_login", arguments: {} });
+    const area = "demo-pickup-fixture-store-1";
+    const tomorrow = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
+    const slots = data(await client.callTool({ name: "get_delivery_slots", arguments: { areaId: area, fromDate: tomorrow, days: 1 } }));
+    const slot = slots.days[0].slots.find((s: any) => s.status === "available");
+    await client.callTool({ name: "select_delivery", arguments: { areaId: area, slotId: slot.slotId } });
+    const draft = { items: [{ productId: "0000000000017", quantity: 1 }], payment: { method: "card", cardId: "demo-card-1" } };
+    const review = data(await client.callTool({ name: "review_order", arguments: draft }));
+    assert.ok(review.confirmationCode, JSON.stringify(review));
+    // The Order press arrives as a separate request, which the server answers with a new MCP server.
+    const placed = await client.callTool({ name: "place_order", arguments: { ...draft, confirmationCode: review.confirmationCode, paymentPage: "later" } });
+    assert.equal(placed.isError, undefined, JSON.stringify(placed.structuredContent));
+    assert.ok(data(placed).order.orderId);
+    await client.close();
+  } finally {
+    await http.close();
+    await runtime.close();
+  }
+});
+
 test("requests without the key, for another host or from a web page are refused", async () => {
   const { http, runtime } = await start();
   try {

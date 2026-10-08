@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
@@ -24,6 +24,7 @@ import type {
   SavedCard,
 } from "./types.js";
 import type { OrderStore } from "./order-store.js";
+import type { OrderReviews } from "./reviews.js";
 
 /** Where S-kaupat's payment provider sends the user back to (the site's own page, which then authorises the payment). */
 export const PAYMENT_RETURN_PREFIX = "https://www.s-kaupat.fi/payment/auth/";
@@ -35,6 +36,8 @@ export interface CheckoutContext {
   auth: SKaupatAuth;
   checkout: CheckoutApi;
   orders: OrderStore;
+  /** Reviews awaiting the Order press; shared by every server on the runtime. */
+  reviews: OrderReviews;
   selection: StoreSelection;
   lists?: ShoppingListApi;
   withToken: WithToken;
@@ -114,9 +117,7 @@ interface Draft {
 }
 
 export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): void {
-  /** Reviews awaiting confirmation: code -> fingerprint of what the user saw. */
-  const reviews = new Map<string, { fingerprint: string; until: number }>();
-  const secret = randomBytes(16).toString("hex");
+  const reviews = ctx.reviews;
 
   const requireDelivery = (store: string): SavedDelivery => {
     const d = ctx.currentDelivery(store);
@@ -210,7 +211,7 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
     createHash("sha256")
       .update(
         JSON.stringify([
-          secret,
+          reviews.secret,
           draft.storeId,
           draft.delivery.area.areaId,
           draft.delivery.slot.slotId,
@@ -329,9 +330,8 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
         const ready = missing.length === 0 && problems.length === 0;
         let confirmationCode: string | null = null;
         if (ready) {
-          confirmationCode = randomBytes(6).toString("hex");
           const total = summary.total[0]?.amount ?? null;
-          reviews.set(confirmationCode, { fingerprint: fingerprint(draft, contact, total), until: ctx.now().getTime() + REVIEW_VALID_MS });
+          confirmationCode = reviews.add({ fingerprint: fingerprint(draft, contact, total), until: ctx.now().getTime() + REVIEW_VALID_MS }, ctx.now().getTime());
         }
         const card = draft.payment.cardId ? cards.find((c) => c.cardId === draft.payment.cardId) : null;
         return {
@@ -396,9 +396,8 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
     async ({ confirmationCode, paymentPage, ...input }) =>
       ctx.run("place_order", async () => {
         if (!ctx.orderingEnabled) throw new SKaupatError("orders_disabled", "place_order is turned off in this server's settings.");
-        const review = reviews.get(confirmationCode);
         // Used up at once, before any await: a double-pressed Order button must not place two orders.
-        reviews.delete(confirmationCode);
+        const review = reviews.take(confirmationCode);
         if (!review || review.until < ctx.now().getTime()) {
           throw new SKaupatError("confirmation_required", "Unknown, used or expired confirmationCode; review the order again.");
         }

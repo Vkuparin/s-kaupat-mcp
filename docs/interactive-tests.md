@@ -5,7 +5,7 @@ Everything below needs a Windows PC with Edge, a real S-kaupat account and the n
 Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 
 ## 1. Extension install
-- [x] Install `s-kaupat-0.4.3.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
+- [x] Install `s-kaupat-0.5.0.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
 - [ ] With Demo mode on, "find milk" works with no browser window and no login.
 - [ ] Turn Demo mode off and restart Claude Desktop.
 
@@ -42,3 +42,7 @@ Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 
 ## 8. Two apps at once
 - [ ] With two apps running the server, the second one gets `browser_busy` while the first one's window is open, and works after it closes.
+
+## 9. Standalone executable (for apps)
+- [ ] Download `s-kaupat-mcp.exe` from the Release workflow's artifact. `s-kaupat-mcp.exe --version` prints the version, without Node installed.
+- [ ] Run it with `--data-dir` pointing at a new folder from an MCP client (for example `npx @modelcontextprotocol/inspector s-kaupat-mcp.exe --data-dir C:\temp\skaupat`): a store search opens the minimised window and answers; `start_login` opens the login window.

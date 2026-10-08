@@ -1,20 +1,23 @@
 {
   "name": "s-kaupat-mcp",
-  "version": "0.4.3",
+  "version": "0.5.0",
   "description": "MCP server for the S-kaupat.fi grocery store",
   "type": "module",
   "bin": {
     "s-kaupat-mcp": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/test",
+    "!dist/**/*.map"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "test": "npm run build && node --test dist/test/*.test.js",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
-    "pack:extension": "node scripts/pack-extension.mjs"
+    "pack:extension": "node scripts/pack-extension.mjs",
+    "build:standalone": "node scripts/build-standalone.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -29,6 +32,17 @@
   "devDependencies": {
     "@anthropic-ai/mcpb": "2.1.2",
     "@types/node": "^22.20.5",
+    "esbuild": "^0.25.10",
+    "postject": "^1.0.0-alpha.6",
     "typescript": "^5.9.3"
+  },
+  "main": "dist/lib.js",
+  "types": "dist/lib.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/lib.d.ts",
+      "default": "./dist/lib.js"
+    },
+    "./package.json": "./package.json"
   }
 }

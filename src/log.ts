@@ -1,7 +1,12 @@
 /**
  * Logging goes to stderr only: stdout carries the MCP stdio protocol.
  */
-const debugEnabled = process.env.SKAUPAT_DEBUG === "1";
+let debugEnabled = process.env.SKAUPAT_DEBUG === "1";
+
+/** Turns request logging on or off (the debug setting). */
+export function setDebugLogging(on: boolean): void {
+  debugEnabled = on;
+}
 
 function write(level: string, msg: string, extra?: Record<string, unknown>): void {
   const line = extra ? `${msg} ${JSON.stringify(extra)}` : msg;

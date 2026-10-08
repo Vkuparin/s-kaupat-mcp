@@ -1,8 +1,15 @@
 # s-kaupat-mcp
 
-An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
+An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.4.3)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.5.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+
+## Get it
+
+- **For your own app:** ship the standalone `s-kaupat-mcp.exe` (Node.js inside, nothing else to install), the single-file `s-kaupat-mcp.cjs`, or the npm package with its library API. See [docs/embedding.md](docs/embedding.md) for packaging and settings, and [docs/caller-guide.md](docs/caller-guide.md) for the user experience.
+- **For Claude Desktop:** the one-click extension, see [Install in Claude Desktop](#install-in-claude-desktop-one-click).
+
+All of these are built by the Release workflow in GitHub Actions.
 
 ## Tools
 
@@ -193,21 +200,16 @@ Instead of the extension, you can point Claude Desktop at a checkout: Settings â
 }
 ```
 
-Add `"env": { "SKAUPAT_MODE": "fixtures" }` for offline sample data. On macOS or Linux use a normal path such as `/Users/you/s-kaupat-mcp/dist/index.js`. Restart Claude Desktop after editing the config. Server logs go to stderr and show up in Claude Desktop's MCP logs.
+Add `"env": { "SKAUPAT_MODE": "demo" }` for offline sample data. On macOS or Linux use a normal path such as `/Users/you/s-kaupat-mcp/dist/index.js`. Restart Claude Desktop after editing the config. Server logs go to stderr and show up in Claude Desktop's MCP logs.
 
 ## Configuration
 
+Settings come from command-line flags, environment variables or a JSON config file (`--config <file>`); every setting is listed in [docs/embedding.md](docs/embedding.md#settings). The most used:
+
 | Variable | Default | Meaning |
 |---|---|---|
-| `SKAUPAT_MODE` | `live` | `live` calls S-kaupat; `fixtures` serves `fixtures/catalogue.json` with no network |
-| `SKAUPAT_DEMO` | off | `true` is the same as `SKAUPAT_MODE=fixtures` (the extension's Demo mode switch) |
-| `SKAUPAT_FIXTURES` | `fixtures/catalogue.json` | Alternative fixture catalogue |
-| `SKAUPAT_SETTINGS_FILE` | `%APPDATA%\s-kaupat-mcp\settings.json` on Windows, `~/.config/s-kaupat-mcp/settings.json` elsewhere | Where the selected store is saved (no credentials) |
-| `SKAUPAT_DATA_DIR` | `%LOCALAPPDATA%\s-kaupat-mcp` on Windows, `~/.config/s-kaupat-mcp` elsewhere | Lock file, token file and the login window's browser profile |
-| `SKAUPAT_TOKEN_STORE` | `credential-manager` on Windows, `file` elsewhere | Where the refresh token is kept |
-| `SKAUPAT_TOKEN_FILE` | `<data dir>/refresh-token` | Token file path when `SKAUPAT_TOKEN_STORE=file` |
-| `SKAUPAT_BROWSER_PATH` | Edge, then Chrome | A Chromium-based browser for the login window |
-| `SKAUPAT_LOGIN_URL` | `https://www.s-kaupat.fi/` | Page the login window opens |
+| `SKAUPAT_MODE` | `live` | `demo` serves built-in sample stores and products with no network (`SKAUPAT_DEMO=true` is the extension's Demo mode switch) |
+| `SKAUPAT_DATA_DIR` | `%LOCALAPPDATA%\s-kaupat-mcp` on Windows, `~/.config/s-kaupat-mcp` elsewhere | Browser profile, lock files and login file |
 | `SKAUPAT_TRANSPORT` | `browser` | `browser` sends API calls from a minimised browser window (see Live mode); `direct` uses plain HTTP |
 | `SKAUPAT_DEBUG` | off | `1` logs each API request to stderr (never tokens) |
 
@@ -231,7 +233,11 @@ The S-kaupat API is unofficial and undocumented. Use this with your own account 
 
 ```
 src/
-  index.ts               stdio entry point, picks live or fixture client
+  index.ts               command line: stdio server
+  lib.ts                 library entry point for apps embedding the server
+  config.ts              settings from flags, environment and config file
+  runtime.ts             builds the live or demo server from the settings
+  demo/catalogue.ts      built-in sample catalogue for demo mode and tests
   server.ts              MCP tool definitions and error mapping
   errors.ts              stable error codes and their Finnish and English messages
   lists/                 shopping list types and the list write flow (per-item results)
@@ -253,15 +259,16 @@ src/
     auth-api.ts          S-kaupat token renewal and profile calls
     fixture-auth.ts      pretend login for fixture mode
   test/                  node:test suites (no network)
-fixtures/catalogue.json  synthetic sample catalogue (also the extension's Demo mode)
 fixtures/api/            trimmed live API responses used by tests
 docs/samples/            live API captures, also parsed by tests
 manifest.json            Claude Desktop extension manifest
-scripts/pack-extension.mjs  builds the .mcpb extension file
+scripts/pack-extension.mjs    builds the .mcpb extension file
+scripts/build-standalone.mjs  builds the single-file executable and JavaScript bundle
+.github/workflows/            CI (tests on Windows and Linux) and the release build
 ```
 
 The MCP layer depends only on the `SKaupatClient` interface, so the transport chosen in S0 (direct HTTP, managed browser or extension) can replace `http-client.ts` without changing the tools.
 
 ## Not included yet
 
-Published releases (the `.mcpb` file is built locally for now). Order placement and payment are deliberately left out. See the plan.
+Order placement and payment are deliberately left out. See the plan.

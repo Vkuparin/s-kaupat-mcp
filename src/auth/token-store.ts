@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { SKaupatConfig } from "../config.js";
 
 /**
  * Where the S-kaupat refresh token is kept between runs. Only the refresh
@@ -14,15 +14,6 @@ export interface TokenStore {
   read(): Promise<string | null>;
   write(token: string): Promise<void>;
   clear(): Promise<void>;
-}
-
-/** Folder for the server's own state: token file, lock file and login browser profile. */
-export function defaultDataDir(): string {
-  if (process.env.SKAUPAT_DATA_DIR) return process.env.SKAUPAT_DATA_DIR;
-  if (process.platform === "win32") {
-    return join(process.env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "s-kaupat-mcp");
-  }
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "s-kaupat-mcp");
 }
 
 /** A plain file readable only by the current user. For hosts without Windows Credential Manager. */
@@ -160,19 +151,13 @@ function powershell(script: string, stdin: string): Promise<string> {
   });
 }
 
-/**
- * SKAUPAT_TOKEN_STORE picks the store: "credential-manager" (default on
- * Windows) or "file" (default elsewhere; path from SKAUPAT_TOKEN_FILE).
- * The lock path is where processes sharing that store coordinate renewal.
- */
-export function createTokenStore(dataDir = defaultDataDir()): { store: TokenStore; lockPath: string } {
-  const kind = process.env.SKAUPAT_TOKEN_STORE ?? (process.platform === "win32" ? "credential-manager" : "file");
-  if (kind === "credential-manager") {
-    return { store: new WindowsCredentialStore(), lockPath: join(dataDir, "refresh.lock") };
+/** The login store a config names; the lock path is where processes sharing it coordinate renewal. */
+export function createTokenStore(config: Pick<SKaupatConfig, "tokenStore" | "tokenFile" | "dataDir">): {
+  store: TokenStore;
+  lockPath: string;
+} {
+  if (config.tokenStore === "credential-manager") {
+    return { store: new WindowsCredentialStore(), lockPath: join(config.dataDir, "refresh.lock") };
   }
-  if (kind === "file") {
-    const path = process.env.SKAUPAT_TOKEN_FILE ?? join(dataDir, "refresh-token");
-    return { store: new FileTokenStore(path), lockPath: `${path}.lock` };
-  }
-  throw new Error(`Unknown SKAUPAT_TOKEN_STORE: ${kind} (expected "credential-manager" or "file")`);
+  return { store: new FileTokenStore(config.tokenFile), lockPath: `${config.tokenFile}.lock` };
 }

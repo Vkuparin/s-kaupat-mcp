@@ -23,6 +23,10 @@ export class FixtureAuth implements SKaupatAuth {
     return { status: "logged_in", displayName: this.displayName, alreadyLoggedIn };
   }
 
+  async logout(): Promise<void> {
+    this.loggedIn = false;
+  }
+
   async getAccessToken(): Promise<string> {
     if (!this.loggedIn) throw new SKaupatError("login_required", "Not logged in (fixture mode).");
     return "fixture-access-token";

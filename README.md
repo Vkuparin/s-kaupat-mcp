@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **early (v0.11.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.12.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -26,6 +26,7 @@ All of these are built by the Release workflow in GitHub Actions.
 | `browse_category` | `slug`, `storeId` (optional), `limit`, `offset`, `sort` | Products in that category, same fields as `search_products` |
 | `login_status` | none | `logged_in` (with the account holder's first name), `logged_out` or `expired`. Never opens a window |
 | `start_login` | `timeoutSeconds` (30 to 900, default 300) | Opens the server's own small login window and waits: `logged_in`, `cancelled` or `timed_out`, each with a Finnish and English message |
+| `log_out` | none | Forgets the login on this device (also in the server's own browser), for a "Log out" or "Switch account" button |
 | `get_shopping_lists` | `storeId` (optional) | The user's lists with items, current prices and an estimated total. Needs login |
 | `get_shopping_list` | `listId`, `storeId` (optional) | One list. Needs login |
 | `create_shopping_list` | `name`, `items[]` (optional), `storeId` (optional) | The new list and, per product, what happened (see below). Needs login |
@@ -44,7 +45,8 @@ All of these are built by the Release workflow in GitHub Actions.
 | `place_order` | the same inputs, `confirmationCode`, `paymentPage` (`own_window`, `app`, `later`) | Reserves the time and places the order on the user's account; for card payment the payment page (opened in the server's window, or its URL for the app). Needs login |
 | `pay_order` | `orderId`, `cardId`, `saveCard`, `paymentPage` | Starts (or retries) the card payment of an order |
 | `confirm_payment` | `orderId` | After the app's own web view returned from the payment page: S-kaupat authorises the payment |
-| `get_order` | `orderId` (optional) | The order's state, payment state, summary and `isCancelable`; without an id the orders placed through this app |
+| `get_order` | `orderId` (optional) | The order's state, payment state, summary, `isCancelable` and, for a pickup-locker order, `lockerPin`; without an id the orders placed through this app |
+| `get_order_items` | `orderId` | The products of an earlier order (fees and packaging left out), ready for `review_order`: "order the same again" |
 | `get_orders` | `limit` | The account's orders, placed here or on the site, as `needsPayment`, `active` and `past`, each with store, method, day, time, total and `placedHere` |
 | `cancel_order` | `orderId` | Cancels the order while S-kaupat allows it |
 | `get_site_choice` | `includeStorageShape` | The store and pickup choice the site itself has in that window, and whether it matches `select_delivery` |

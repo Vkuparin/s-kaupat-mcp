@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { log } from "../log.js";
 
@@ -20,6 +20,8 @@ export interface OrderStore {
   /** Newest first. */
   list(): PlacedOrderRecord[];
   save(record: PlacedOrderRecord): void;
+  /** Forgets every order (on log out: the access tokens belong to that account). */
+  clear(): void;
 }
 
 /** Older entries are dropped: an order is long done after this many. */
@@ -35,6 +37,9 @@ export class MemoryOrderStore implements OrderStore {
   }
   save(record: PlacedOrderRecord): void {
     this.records = [record, ...this.records.filter((r) => r.orderId !== record.orderId)].slice(0, KEEP);
+  }
+  clear(): void {
+    this.records = [];
   }
 }
 
@@ -60,6 +65,10 @@ export class FileOrderStore implements OrderStore {
     } catch {
       // Windows keeps the file in the user's own profile folder; chmod is best effort.
     }
+  }
+
+  clear(): void {
+    rmSync(this.path, { force: true });
   }
 
   private read(): PlacedOrderRecord[] {

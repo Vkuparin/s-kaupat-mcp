@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "s-kaupat-mcp",
   "display_name": "S-kaupat",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "description": "Find S-kaupat stores, search groceries, fill your shopping lists and order with pickup or home delivery.",
   "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others) and a pickup time, search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. Claude can also place the order for you: it shows the summary with S-kaupat's own total and places the order only after you say yes. Card payment happens on the payment provider's page, which opens in the extension's own window; pay on delivery needs nothing more. Turn \"Allow ordering\" off in the settings if you only want lists.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 3 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
   "author": {
@@ -39,6 +39,7 @@
     { "name": "browse_category", "description": "Products in one category." },
     { "name": "login_status", "description": "Whether the user is logged in to S-kaupat." },
     { "name": "start_login", "description": "Open the S-kaupat login window when the user asks to log in." },
+    { "name": "log_out", "description": "Forget the S-kaupat login on this device (log out or switch account)." },
     { "name": "get_shopping_lists", "description": "The user's S-kaupat shopping lists with prices." },
     { "name": "get_shopping_list", "description": "One shopping list with prices and an estimated total." },
     { "name": "create_shopping_list", "description": "Create a shopping list, optionally with products." },
@@ -59,6 +60,7 @@
     { "name": "pay_order", "description": "Start or retry the card payment of an order." },
     { "name": "confirm_payment", "description": "Finish a card payment shown in the app's own view." },
     { "name": "get_order", "description": "An order's status and payment, or the orders placed here." },
+    { "name": "get_order_items", "description": "The products of an earlier order, for ordering the same again." },
     { "name": "get_orders", "description": "The account's orders, placed here or on the site: needing payment, active and past." },
     { "name": "cancel_order", "description": "Cancel an order when the user asks." }
   ],

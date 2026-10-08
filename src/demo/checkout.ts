@@ -13,6 +13,7 @@ import type {
   OrderSummary,
   OrderValidation,
   PackagingOption,
+  PastOrderItem,
   Reservation,
   SavedCard,
   StoreCheckoutInfo,
@@ -152,6 +153,26 @@ export class DemoCheckout implements CheckoutApi {
         const entry = this.orders.get(id)!;
         return { ...info, createdAt: entry.createdAt, storeName: null, deliveryMethod: null, total: null };
       });
+  }
+
+  async getOrderItems(_token: string, orderId: string): Promise<PastOrderItem[] | null> {
+    const entry = this.orders.get(orderId);
+    if (!entry) return null;
+    return entry.order.items.map((i) => ({
+      productId: i.productId,
+      name: null,
+      quantity: i.quantity,
+      unit: i.unit,
+      price: null,
+      allowSubstitutes: i.allowSubstitutes,
+      note: i.note ?? null,
+    }));
+  }
+
+  async getLockerPin(_token: string, orderId: string): Promise<string | null> {
+    const entry = this.orders.get(orderId);
+    // Demo lockers are the "Noutolokero" areas.
+    return entry && entry.order.slotId.startsWith("demo-locker-") && entry.status !== "CANCELLED" ? "4711" : null;
   }
 
   private info(orderId: string): OrderInfo | null {

@@ -243,6 +243,78 @@ test("HTTP adapter: order history uses the site's variables and maps each order"
   assert.equal(orders[1]!.payment, "not_needed");
 });
 
+test("log out forgets the login and the orders placed here", async () => {
+  const { mcp } = await connect();
+  await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-1", slotId: SLOT });
+  const draft = { items: ITEMS, payment: { method: "on_delivery" } };
+  const review = await call(mcp, "review_order", draft);
+  const placed = await call(mcp, "place_order", { ...draft, confirmationCode: review.data.confirmationCode });
+  const out = await call(mcp, "log_out");
+  assert.equal(out.data.status, "logged_out");
+  assert.ok(out.data.userMessage.fi);
+  assert.equal((await call(mcp, "login_status")).data.status, "logged_out");
+  assert.equal((await call(mcp, "get_orders")).data.error.code, "login_required");
+  await call(mcp, "start_login");
+  assert.deepEqual((await call(mcp, "get_order")).data.orders, []);
+  assert.equal((await call(mcp, "get_orders")).data.active[0].placedHere, false, placed.data.order.orderId);
+});
+
+test("order the same again: an earlier order's products go straight into a new review", async () => {
+  const { mcp } = await connect();
+  await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-1", slotId: SLOT });
+  const draft = { items: ITEMS, payment: { method: "on_delivery" } };
+  const review = await call(mcp, "review_order", draft);
+  const placed = await call(mcp, "place_order", { ...draft, confirmationCode: review.data.confirmationCode });
+  const items = await call(mcp, "get_order_items", { orderId: placed.data.order.orderId });
+  assert.deepEqual(
+    items.data.items.map((i: any) => [i.productId, i.quantity, i.allowSubstitutes]),
+    [["0000000000017", 2, true], ["0000000000024", 1, false]],
+  );
+  const again = await call(mcp, "review_order", { items: items.data.items, payment: { method: "on_delivery" } });
+  assert.equal(again.data.ready, true);
+  const missing = await call(mcp, "get_order_items", { orderId: "no-such-order" });
+  assert.equal(missing.data.error.code, "order_not_found");
+});
+
+test("a pickup-locker order shows its PIN in the app", async () => {
+  const { mcp } = await connect();
+  const locker = "demo-locker-fixture-store-1";
+  await call(mcp, "select_delivery", { areaId: locker, slotId: `${locker}-2026-10-09-16` });
+  const draft = { items: ITEMS, payment: { method: "on_delivery" } };
+  const review = await call(mcp, "review_order", draft);
+  const placed = await call(mcp, "place_order", { ...draft, confirmationCode: review.data.confirmationCode });
+  const order = await call(mcp, "get_order", { orderId: placed.data.order.orderId });
+  assert.equal(order.data.lockerPin, "4711");
+  await call(mcp, "cancel_order", { orderId: placed.data.order.orderId });
+  assert.equal((await call(mcp, "get_order", { orderId: placed.data.order.orderId })).data.lockerPin, null);
+});
+
+test("HTTP adapter: an earlier order's products leave out packaging and fees", async () => {
+  const api = new HttpCheckoutApi({
+    graphql: async (op) => {
+      if (op !== "GetOrderCopyDataById") throw new Error(op);
+      return {
+        data: {
+          order: {
+            id: "o1",
+            cartItems: [
+              { ean: "6410405082657", itemCount: "2", name: "Maito 1l", price: 1.09, replace: true, additionalInfo: "", product: { id: "6410405082657", productType: "PRODUCT", pricing: { salesUnit: "KPL" } } },
+              { ean: "2000818700008", itemCount: "0.5", name: "Banaani", price: 1.99, replace: false, additionalInfo: "kypsiä", product: { productType: "PRODUCT", pricing: { salesUnit: "KG" } } },
+              { ean: "6430049370013", itemCount: "1", name: "Pahvilaatikko", price: 0.85, product: { productType: "PACKAGING_MATERIAL" } },
+              { ean: "2000000000010", itemCount: "1", name: "Keräilymaksu", price: 1, product: { productType: "SERVICE_FEE" } },
+            ],
+          },
+        },
+      };
+    },
+  });
+  const items = await api.getOrderItems("t", "o1", null);
+  assert.deepEqual(items, [
+    { productId: "6410405082657", name: "Maito 1l", quantity: 2, unit: "KPL", price: 1.09, allowSubstitutes: true, note: null },
+    { productId: "2000818700008", name: "Banaani", quantity: 0.5, unit: "KG", price: 1.99, allowSubstitutes: false, note: "kypsiä" },
+  ]);
+});
+
 test("place_order can be turned off", async () => {
   const { mcp } = await connect({ ordering: false });
   const res = await call(mcp, "place_order", { items: ITEMS, payment: { method: "card" }, confirmationCode: "x" });

@@ -5,6 +5,8 @@ name: Release
 #   s-kaupat-mcp.cjs             the server as one JavaScript file, for apps that ship Node
 #   s-kaupat-mcp-<version>.tgz   the npm package (command line and library)
 #   s-kaupat-<version>.mcpb      the Claude Desktop extension
+#   tools.json                   every tool's schema, with the server and schema versions
+#   SHA256SUMS                   checksums of the files above
 # Run it by hand (Actions → Release → Run workflow) to get the files as a build artifact, or push a
 # tag like v0.5.0 to also publish them as a GitHub release.
 on:
@@ -29,13 +31,15 @@ jobs:
       - run: npm run build:standalone
       - run: npm run pack:extension
       - run: npm pack --pack-destination build
+      - run: node scripts/export-tools.mjs
       - name: Collect files
         shell: bash
         run: |
           mkdir -p release
           cp build/standalone/s-kaupat-mcp.exe build/standalone/s-kaupat-mcp.cjs release/
-          cp build/s-kaupat-mcp-*.tgz s-kaupat-*.mcpb release/
+          cp build/s-kaupat-mcp-*.tgz s-kaupat-*.mcpb build/tools.json release/
           ./release/s-kaupat-mcp.exe --version
+          (cd release && sha256sum * > SHA256SUMS)
           ls -l release
       - uses: actions/upload-artifact@v4
         with:

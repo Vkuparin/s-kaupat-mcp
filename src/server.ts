@@ -17,7 +17,7 @@ import type { CheckoutApi } from "./checkout/types.js";
 import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.11.0";
+export const SERVER_VERSION = "0.12.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -70,8 +70,9 @@ export const SERVER_INSTRUCTIONS = [
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
   "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Pikatoimitus (express) works the same way: an expressStores entry's areaId goes to get_delivery_slots.",
-  "6. Order in the app: get_checkout_options (payment methods, saved cards, packaging, contact details), then review_order and show its summary and total. Call place_order with review_order's confirmationCode only after the user explicitly says yes to that summary. Card payment opens the payment provider's page in this server's window; get_order then shows when it is paid. Never place again after order_uncertain: check get_orders first. get_orders lists the account's orders, also those made on the site.",
+  "6. Order in the app: get_checkout_options (payment methods, saved cards, packaging, contact details), then review_order and show its summary and total. Call place_order with review_order's confirmationCode only after the user explicitly says yes to that summary. Card payment opens the payment provider's page in this server's window; get_order then shows when it is paid. Never place again after order_uncertain: check get_orders first. get_orders lists the account's orders, also those made on the site; get_order_items gives a past order's products to order again.",
   "7. Or the user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in.",
+  "log_out forgets the login on this device; call it only when the user asks (log out or switch account).",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
 
@@ -307,6 +308,27 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       run("start_login", async () => {
         const result = await auth.startLogin({ timeoutSeconds });
         return { ...result, userMessage: LOGIN_MESSAGES[result.status] };
+      }),
+  );
+
+  server.registerTool(
+    "log_out",
+    {
+      title: "Log out of S-kaupat on this device",
+      description:
+        "Forgets the S-kaupat login on this device, for a 'Log out' or 'Switch account' button: the saved login, " +
+        "the session in this server's own browser, and the orders remembered for pay_order and cancel_order. The " +
+        "next start_login asks for the account again. Shopping lists and orders stay on the S-kaupat account. Call " +
+        "it only when the user asks. Other apps using the same login on this device are logged out too.",
+      inputSchema: {},
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async () =>
+      run("log_out", async () => {
+        // The orders first: if the browser part fails, the user can press again and nothing is left behind.
+        options.orders?.clear();
+        await auth.logout();
+        return { status: "logged_out" as const, userMessage: { fi: "Olet kirjautunut ulos.", en: "You are logged out." } };
       }),
   );
 

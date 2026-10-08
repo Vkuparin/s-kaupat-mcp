@@ -55,7 +55,7 @@ const itemSchema = z.object({
   productId: z.string().min(1).describe("Product ID (EAN) from search_products."),
   quantity: z.number().positive().max(99).default(1).describe("Pieces, or kilograms for products sold by weight."),
   allowSubstitutes: z.boolean().default(true).describe("Whether the store may pick a similar product if this one is out of stock."),
-  note: z.string().max(200).optional().describe("A note to the picker about this product, e.g. 'kypsiä'."),
+  note: z.string().max(200).nullish().describe("A note to the picker about this product, e.g. 'kypsiä'."),
 });
 
 const draftShape = {
@@ -568,20 +568,56 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
       description:
         "An order's status: state (received, being_picked, done, cancelled) and payment (awaiting_payment, paid, " +
         "charged, payment_failed, payment_link, not_needed, cancelled), with S-kaupat's own summary and whether it can " +
-        "still be cancelled. Without orderId: the orders placed through this app, newest first. After the payment page, " +
-        "call it to see when the payment went through. Needs a login.",
+        "still be cancelled. lockerPin is the code for collecting a pickup-locker order (null otherwise): show it to " +
+        "the user only, never log it. Without orderId: the orders placed through this app, newest first. After the " +
+        "payment page, call it to see when the payment went through. Needs a login.",
       inputSchema: { orderId: z.string().min(1).optional() },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async ({ orderId }) =>
       ctx.run("get_order", async () => {
         if (orderId) {
-          const order = await ctx.withToken((t) => requireOrder(t, orderId));
-          return { order, nextStep: nextStepFor(order.state === "cancelled" ? "cancelled" : order.payment === "awaiting_payment" ? "payment_page" : "placed") };
+          const { order, lockerPin } = await ctx.withToken(async (t) => {
+            const order = await requireOrder(t, orderId);
+            // Only for an order that is going ahead, so polling during payment adds no calls.
+            const live = order.state !== "cancelled" && order.state !== "done" && order.payment !== "awaiting_payment";
+            const lockerPin = live
+              ? await ctx.checkout.getLockerPin(t, orderId, orderToken(orderId)).catch((err) => {
+                  log.warn("Locker PIN could not be read", { code: toSKaupatError(err).code });
+                  return null;
+                })
+              : null;
+            return { order, lockerPin };
+          });
+          return {
+            order,
+            lockerPin,
+            nextStep: nextStepFor(order.state === "cancelled" ? "cancelled" : order.payment === "awaiting_payment" ? "payment_page" : "placed"),
+          };
         }
         return {
           orders: ctx.orders.list().map((r) => ({ orderId: r.orderId, orderNumber: r.orderNumber, storeId: r.storeId, placedAt: r.placedAt })),
         };
+      }),
+  );
+
+  server.registerTool(
+    "get_order_items",
+    {
+      title: "Get the products of an earlier order",
+      description:
+        "The products of one of the user's orders (from get_orders or get_order), for 'Order the same again': each " +
+        "with productId, name, quantity, unit, the price it had then, allowSubstitutes and note. Fees and packaging " +
+        "are left out. Pass the items straight to review_order, or to create_shopping_list to edit them first; " +
+        "prices and availability are checked again there. Read-only. Needs a login.",
+      inputSchema: { orderId: z.string().min(1).describe("orderId from get_orders or get_order.") },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ orderId }) =>
+      ctx.run("get_order_items", async () => {
+        const items = await ctx.withToken((t) => ctx.checkout.getOrderItems(t, orderId, orderToken(orderId)));
+        if (!items) throw new SKaupatError("order_not_found", `Order ${orderId} was not found.`, { orderId });
+        return { orderId, items };
       }),
   );
 

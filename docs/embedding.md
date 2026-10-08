@@ -11,6 +11,8 @@ The server is a plain [MCP](https://modelcontextprotocol.io) server. It does not
 | npm package (`s-kaupat-mcp-<version>.tgz`) | Command line plus a library API | Your app is a Node app and wants the server in its own process |
 | `s-kaupat-<version>.mcpb` | Claude Desktop extension | Installing for Claude Desktop |
 
+Each release also has `tools.json` (every tool's name, description and input schema, with `version` and `schemaVersion`, so an app can check what it builds against without starting the server; `npm run export:tools` writes it locally) and `SHA256SUMS`, to check the files an app downloads and ships.
+
 All four are built by the **Release** GitHub Actions workflow (run it by hand for a build artifact, or push a `v*` tag for a GitHub release). To build locally: `npm run build:standalone` (exe and `.cjs` for the platform you build on), `npm pack` and `npm run pack:extension`.
 
 ## Run it over stdio

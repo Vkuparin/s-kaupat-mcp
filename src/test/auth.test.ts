@@ -276,3 +276,23 @@ test("a temporary problem renewing a saved login does not read as logged out", a
   };
   assert.equal((await auth.status()).status, "logged_in");
 });
+
+test("log out forgets the stored login and clears the browser profile's session", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "skaupat-auth-"));
+  const store = new FileTokenStore(join(dir, "refresh-token"));
+  await store.write("refresh-1");
+  let forgotten = 0;
+  const auth = new LiveAuth({
+    store,
+    api: new RotatingApi(),
+    window: new FakeWindow({ status: "cancelled" }),
+    lockPath: join(dir, "refresh.lock"),
+    forgetSiteSession: async () => void forgotten++,
+  });
+  assert.equal((await auth.status()).status, "logged_in");
+  await auth.logout();
+  assert.equal(await store.read(), null);
+  assert.equal(forgotten, 1);
+  assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null });
+  await assert.rejects(auth.getAccessToken(), (e: SKaupatError) => e.code === "login_required");
+});

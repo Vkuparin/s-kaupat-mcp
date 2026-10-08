@@ -34,9 +34,9 @@ export class DemoCheckout implements CheckoutApi {
 
   async getPackagingOptions(): Promise<PackagingOption[]> {
     return [
-      { packagingId: "2000000000001", type: "deposit_bag", price: 0, priceUnit: "KPL" },
-      { packagingId: "2000000000002", type: "plastic_bag", price: 0.39, priceUnit: "KPL" },
-      { packagingId: "2000000000003", type: "standard", price: 0, priceUnit: "KPL" },
+      { packagingId: "2000000000001", type: "deposit_bag", price: 0, unitPrice: null },
+      { packagingId: "2000000000002", type: "plastic_bag", price: 1.95, unitPrice: 0.39 },
+      { packagingId: "2000000000003", type: "cardboard_box", price: 0.85, unitPrice: null },
     ];
   }
 

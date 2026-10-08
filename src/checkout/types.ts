@@ -30,9 +30,10 @@ export interface PackagingOption {
   /** Put this in the order as packagingId. */
   packagingId: string;
   type: "plastic_bag" | "cardboard_box" | "deposit_bag" | "standard" | "unknown";
-  /** Euros, per priceUnit (usually per bag or box, counted by the store). */
+  /** Euros S-kaupat expects this packaging to cost for an order (live: box 0,85 €, bags 3,00 €). */
   price: number | null;
-  priceUnit: string | null;
+  /** Euros per bag or box, when S-kaupat gives it (live: plastic bag 0,59 €); the store counts what it uses. */
+  unitPrice: number | null;
 }
 
 /** Fees and products S-kaupat adds to an order for this time (e.g. the delivery fee). */

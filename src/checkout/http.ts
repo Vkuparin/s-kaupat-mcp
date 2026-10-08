@@ -100,7 +100,8 @@ export class HttpCheckoutApi implements CheckoutApi {
         packagingId: String(o.ean),
         type: materialType(str(o.materialType)),
         price: num(o.materialPrice),
-        priceUnit: str(o.materialPriceUnit),
+        // Named like a unit, but live it holds the price per bag (2026-10-08: "0.59").
+        unitPrice: num(o.materialPriceUnit),
       };
     });
   }

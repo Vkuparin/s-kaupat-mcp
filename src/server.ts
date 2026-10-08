@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
-import { listNotFound, SKaupatError, storeNotFound, storeNotSelected, toSKaupatError, USER_MESSAGES } from "./errors.js";
+import { ERROR_ACTIONS, listNotFound, SKaupatError, storeNotFound, storeNotSelected, toSKaupatError, USER_MESSAGES } from "./errors.js";
 import { addItemsToList, type ListWriteResult, type WithToken } from "./lists/service.js";
 import type { ShoppingList, ShoppingListApi } from "./lists/types.js";
 import { log } from "./log.js";
@@ -11,7 +11,7 @@ import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./se
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.3.0";
+export const SERVER_VERSION = "0.4.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.2";
 
@@ -31,10 +31,23 @@ export interface ServerOptions {
   now?: () => Date;
   /** Shopping-list calls (need a login). Without it the list tools answer unsupported. */
   lists?: ShoppingListApi;
+  /** demo: sample data, no S-kaupat account (the extension's Demo mode). Reported by get_setup_status. */
+  mode?: "live" | "demo";
 }
 
+/** Read by MCP clients that pass server instructions to the model. */
+export const SERVER_INSTRUCTIONS = [
+  "S-kaupat (Finnish grocery store) tools. Typical flow:",
+  "1. Call get_setup_status first. If nextStep is choose_store, help the user pick a store with search_stores and select_store.",
+  "2. Search with search_products (queries in Finnish work best, e.g. 'maito', 'ruisleipä') or browse with list_categories and browse_category.",
+  "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
+  "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
+  "5. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin', check out. These tools never place orders or pay.",
+  "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
+].join("\n");
+
 export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: ServerOptions = {}): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
+  const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION }, { instructions: SERVER_INSTRUCTIONS });
   const selection = options.selection ?? new MemoryStoreSelection();
   const now = options.now ?? (() => new Date());
   /** Stores seen in search results, so select_store can save the address the user saw. */
@@ -45,6 +58,42 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     if (!resolved) throw storeNotSelected();
     return resolved;
   };
+
+  server.registerTool(
+    "get_setup_status",
+    {
+      title: "Check what is set up",
+      description:
+        "One call for an app's first screen: whether a store is chosen, whether the user is logged in, and " +
+        "nextStep: choose_store, log_in or null when everything is ready. Searching works once a store is " +
+        "chosen; shopping lists also need a login. mode is demo when the server uses sample data. Never opens " +
+        "a login window.",
+      inputSchema: {},
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async () =>
+      run("get_setup_status", async () => {
+        const store = selection.get() ?? null;
+        let login: { status: string; displayName: string | null };
+        try {
+          login = await auth.status();
+        } catch (err) {
+          // Login state is one part of the answer; a hiccup there must not hide the rest.
+          log.warn("Could not read the login status", { code: toSKaupatError(err).code });
+          login = { status: "unknown", displayName: null };
+        }
+        // "unknown" counts as logged in: a list call will say if it is not, and the app shouldn't nag.
+        const loggedIn = login.status === "logged_in" || login.status === "unknown";
+        return {
+          mode: options.mode ?? "live",
+          store: store ? { id: store.id, name: store.name, chainName: store.chainName } : null,
+          login: { status: login.status, displayName: login.displayName },
+          canSearch: store !== null,
+          canUseLists: store !== null && loggedIn,
+          nextStep: store === null ? "choose_store" : loggedIn ? null : "log_in",
+        };
+      }),
+  );
 
   server.registerTool(
     "search_stores",
@@ -629,7 +678,7 @@ async function run(tool: string, fn: () => Promise<object>): Promise<CallToolRes
     log.error(`${tool} failed`, { code: e.code, message: e.message });
     const error = {
       schemaVersion: SCHEMA_VERSION,
-      error: { code: e.code, message: e.message, userMessage: USER_MESSAGES[e.code], ...e.details },
+      error: { code: e.code, ...ERROR_ACTIONS[e.code], message: e.message, userMessage: USER_MESSAGES[e.code], ...e.details },
     };
     return {
       content: [{ type: "text", text: JSON.stringify(error, null, 2) }],

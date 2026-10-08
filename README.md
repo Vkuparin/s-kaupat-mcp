@@ -2,12 +2,13 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets Claude (or any MCP client) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, which the user then turns into a cart with one button on the site.
 
-Status: **early (v0.3.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.4.0)**. Catalogue, store-selection, login and shopping list tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Tools
 
 | Tool | Input | Returns |
 |---|---|---|
+| `get_setup_status` | none | For an app's first screen: the chosen store, login status, `canSearch`, `canUseLists`, and `nextStep` (`choose_store`, `log_in` or `null`). Never opens a window |
 | `search_stores` | `query` (name, city or postal code), `chain`, `limit`, `includeOpeningHours` | Picker-ready stores: ID, name, chain, address, coordinates, online ordering, today's opening hours, whether it is the selected store |
 | `select_store` | `storeId` | Saves the user's store and returns it with opening hours for the coming week |
 | `get_selected_store` | none | The saved store with opening hours, or `selectedStore: null` when none is chosen yet |
@@ -26,6 +27,8 @@ Status: **early (v0.3.0)**. Catalogue, store-selection, login and shopping list 
 | `delete_shopping_list` | `listId` | Deletes the whole list. Needs login |
 
 Prices are per store. Product tools use the store chosen with `select_store` unless a `storeId` is passed, and fail with `store_not_selected` when there is neither. Fields S-kaupat does not report come back as `null` (or `"unknown"`) rather than guessed.
+
+Building an app on top of this server? [docs/caller-guide.md](docs/caller-guide.md) walks through first run, login, the store picker, filling a list and showing every error.
 
 ### Store picker flow for apps
 
@@ -61,13 +64,15 @@ Every result carries `schemaVersion`. Failures come back as MCP tool errors (`is
   "schemaVersion": "0.2",
   "error": {
     "code": "login_required",
+    "action": "log_in",
+    "retryable": false,
     "message": "No stored S-kaupat login.",
     "userMessage": { "fi": "Kirjaudu ensin S-kaupat-tilillesi.", "en": "Please log in to your S-kaupat account first." }
   }
 }
 ```
 
-Apps should branch on `code`, never on the message text. The codes an app is most likely to act on:
+Apps should branch on `code` or `action`, never on the message text. `action` says what to offer the user (`log_in`, `finish_login`, `choose_store`, `retry`, `check_list`, `refresh_lists`, `choose_other_product`, `install_browser` or `none`) and `retryable` whether trying again later can help. The codes an app is most likely to act on:
 
 | Code | What the app should do |
 |---|---|
@@ -130,7 +135,7 @@ A list write returns one result per requested product, so the app can show exact
 
 Before writing, the server looks up all products in one request (S-kaupat needs each product's internal id and name for a list row) and runs S-kaupat's anonymous cart check. In `SKAUPAT_MODE=fixtures`, lists are kept in memory after `start_login`, and product `0000000000055` is out of stock, so apps can build the whole flow offline.
 
-Not yet checked against the live site: the exact shape of list reads (written from the website's own query text), and whether S-kaupat accepts the list item fields it showed in a test (`ean`, `sokId`, `name`, `quantity`, `isReplaceable`) from outside the browser. Updating an item's quantity is a remove and re-add, because S-kaupat's item update input is not mapped yet.
+Not yet checked against the live site: the exact shape of list reads (written from the website's own query text), and whether S-kaupat accepts the list item fields it showed in a test (`ean`, `sokId`, `name`, `quantity`, `isReplaceable`) from outside the browser. Changing an item's quantity adds a new row and then removes the old one, because S-kaupat's item update input is not mapped yet; if a step fails, the product stays on the list and the result says `uncertain`.
 
 ## Install in Claude Desktop (one click)
 

@@ -9,7 +9,7 @@ Install the newest `s-kaupat-<version>.mcpb`: Claude Desktop → Settings → Ex
 - [ ] Demo mode off, restart Claude Desktop: `get_selected_store` and `login_status` still know the store and the login.
 
 ## 2. The minimised window
-- [ ] The first call opens one Edge window minimised in the taskbar, with one tab and the "controlled by automated software" bar (intended).
+- [ ] The first call opens one Edge window, minimised and with no taskbar button or Alt+Tab entry, with one tab and the "controlled by automated software" bar (intended).
 - [ ] It closes after about 3 idle minutes; the next call opens it again. Closing it by hand: the next call still works.
 
 ## 3. Login

@@ -298,14 +298,18 @@ export class HttpCheckoutApi implements CheckoutApi {
       return null;
     }
     const rows = obj(order).cartItems;
+    const seen = new Set<string>();
     return (Array.isArray(rows) ? rows : []).flatMap((raw) => {
       const r = obj(raw);
       const product = obj(r.product);
       const ean = str(r.ean);
       const quantity = num(r.itemCount);
-      // Packaging, bags and fees are rows too; only products can be ordered again.
+      // Packaging, bags and fees are rows too, often with no product at all (seen live 2026-10-08:
+      // "Kotiinkuljetus", "Pakkausmateriaalimaksu"). Like the site's own "order again", keep only rows
+      // whose product is a PRODUCT, once per EAN.
       const type = str(product.productType)?.toUpperCase();
-      if (!ean || quantity === null || quantity <= 0 || (type && type !== "PRODUCT")) return [];
+      if (!ean || quantity === null || quantity <= 0 || type !== "PRODUCT" || seen.has(ean)) return [];
+      seen.add(ean);
       const unit = (str(obj(product.pricing).salesUnit) ?? str(r.priceUnit))?.toUpperCase() ?? null;
       return [
         {

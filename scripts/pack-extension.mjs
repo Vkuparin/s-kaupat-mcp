@@ -21,7 +21,7 @@ if (manifest.version !== pkg.version) {
 run("npm run build");
 rmSync(stage, { recursive: true, force: true });
 mkdirSync(stage, { recursive: true });
-for (const file of ["manifest.json", "package.json", "package-lock.json", "README.md"]) {
+for (const file of ["manifest.json", "package.json", "package-lock.json", "README.md", "LICENSE"]) {
   cpSync(join(root, file), join(stage, file), { recursive: true });
 }
 cpSync(join(root, "dist"), join(stage, "dist"), {

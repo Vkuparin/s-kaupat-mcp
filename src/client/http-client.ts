@@ -3,7 +3,7 @@ import { isProductUnavailableError, listNotFound, SKaupatError, storeNotFound } 
 import { log } from "../log.js";
 import { chainCode, chainName, toOpeningDay } from "../stores.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi, ShoppingListItem } from "../lists/types.js";
-import { deliveryMethod, euros, isoTime, slotDate, slotStatus } from "../delivery/format.js";
+import { deliveryMethod, euros, rawHandover, isoTime, slotDate, slotStatus } from "../delivery/format.js";
 import type {
   AddressSuggestion,
   DeliveryApi,
@@ -1240,6 +1240,7 @@ function mapDeliveryArea(a: z.infer<typeof ApiDeliveryAreaSchema>, now: Date): D
     areaId: a.areaId,
     name: a.name ?? null,
     method: deliveryMethod(a.deliveryMethod, a.isFastTrack),
+    ...(a.isFastTrack ? { handover: rawHandover(a.deliveryMethod) } : {}),
     storeId: a.storeId ?? a.store?.id ?? null,
     storeName: a.store?.name ?? null,
     price: euros(a.price),

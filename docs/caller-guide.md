@@ -87,13 +87,13 @@ Optional, but it saves the user a step on the site and lets the app check the ba
      - `methods`: pickup, home delivery and express, each with `available` and S-kaupat's own Finnish `summary` ("8,90–14,90 € • Huomenna"). Show them as three buttons and disable the unavailable ones.
      - `pickupOptions`: the pickup places nearest to the address, with `distanceMeters`, `address` and `nextSlot`, nearest first.
      - `homeDeliveryOptions`: the stores that deliver to that postal code, each with `nextSlot` and `freeTimesOnDate`.
-     - `expressStores`: stores that deliver within about an hour (`kind` `one_hour` or `robot`, `summary`, `fee`). Pikatoimitus is ordered on the site for now (`siteOnlyMethods`): tell the user to choose it there after "Lisää kaikki ostoskoriin" and go straight to `open_site`.
+     - `expressStores`: stores that deliver within about an hour (`kind` `one_hour` or `robot`, `summary`, `fee`). Each has an `areaId`: pass it to `get_delivery_slots` and continue as with any option. Pikatoimitus is ordered in the app like the others; it is delivered home, so checkout asks for the address. (`siteOnlyMethods` is kept empty for older apps.)
      - `partial`, only when a part could not be read; show the rest.
 
      The address is the user's personal data: the server does not save or log it; keep it in the app only if the user wants that.
    - **From the chosen store.** `get_delivery_options` without `location` lists the store's own pickup places.
 
-   Show each pickup or home delivery option as a card: `name`, `address` (pickup), "next free: …" from `nextSlot` (from the store's list its `end` and `closesAt` may be null; the calendar has both). `expressTimesOnDate` counts "Pikanouto"/fast-track times, which are chosen on the site.
+   Show each pickup or home delivery option as a card: `name`, `address` (pickup), "next free: …" from `nextSlot` (from the store's list its `end` and `closesAt` may be null; the calendar has both). `expressTimesOnDate` counts "Pikanouto"/fast-track times; where the option's calendar lists them they come with `express: true` and are chosen like any other time.
 2. **Day.** `get_delivery_slots` with the option's `areaId` returns `days`, each with `availableCount`. Show a week as a row of days and grey out days with `availableCount: 0`. Ask for the next week with `fromDate`.
 3. **Time.** The chosen day's `slots`, each with `start`–`end` and its own fee. Only `available` can be chosen; show `full` and `closed` greyed out, and treat `unknown` like `full`. Times are ISO; show them in Finnish local time.
 4. **Summary.** `select_delivery` with `areaId` and `slotId`. If someone took the time meanwhile it fails with `slot_unavailable` (action `choose_delivery_time`): show the times again. On success show `delivery` as a confirmation: place, day, time and fee.

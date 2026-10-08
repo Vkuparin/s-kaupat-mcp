@@ -27,8 +27,13 @@ export function demoPickupAreas(store: Store, index: number, now: Date): Deliver
 }
 
 export function demoCalendar(store: Store, index: number, areaId: string, startDate: string, endDate: string, now: Date): DeliveryCalendar | null {
-  const found = [...demoPickupAreas(store, index, now), demoHomeArea(store, now)].find((a) => a.areaId === areaId);
+  const found = [...demoPickupAreas(store, index, now), demoHomeArea(store, now), demoExpressArea(store, now)].find((a) => a.areaId === areaId);
   if (!found) return null;
+  if (found.method === "express") {
+    const slots: DeliverySlot[] = [];
+    for (let date = startDate; date <= endDate; date = nextDate(date)) slots.push(...expressSlots(areaId, date, now));
+    return { area: { ...found, nextSlot: slots.find((s) => s.status === "available") ?? null }, slots };
+  }
   const extra = found.method === "home_delivery" ? 5 : 0;
   const slots: DeliverySlot[] = [];
   for (let date = startDate; date <= endDate; date = nextDate(date)) {
@@ -144,6 +149,32 @@ export function demoDeliveryMethods(location: DeliveryLocation, stores: Store[])
 /** Home delivery from the first Helsinki store to Helsinki postal codes; slots cost 5 € more than pickup. */
 export function demoHomeArea(store: Store, now: Date): DeliveryArea {
   return { ...area(store, `demo-home-${store.id}`, store.name, 8.9, now), method: "home_delivery", address: null };
+}
+
+/** Pikatoimitus from a store: one-hour home deliveries from 10 to 21, ordering closes an hour before. */
+export function demoExpressArea(store: Store, now: Date): DeliveryArea {
+  const base = area(store, `demo-express-${store.id}`, `Pikatoimitus ${store.name}`, 9.9, now);
+  return { ...base, method: "express", handover: "home_delivery", address: null, nextSlot: null };
+}
+
+function expressSlots(areaId: string, date: string, now: Date): DeliverySlot[] {
+  const slots: DeliverySlot[] = [];
+  for (let hour = 10; hour < 21; hour++) {
+    const start = helsinkiIso(date, hour);
+    const closesAt = new Date(Date.parse(start) - 3_600_000).toISOString();
+    slots.push({
+      slotId: `${areaId}-${date}-${hour}`,
+      areaId,
+      date,
+      start,
+      end: helsinkiIso(date, hour + 1),
+      price: 9.9,
+      status: slotStatus(false, "AVAILABLE", closesAt, now),
+      closesAt,
+      express: true,
+    });
+  }
+  return slots;
 }
 
 export function demoHomeDelivery(stores: Store[], postalCode: string, startDate: string, endDate: string, now: Date): NearbyHomeDelivery[] {

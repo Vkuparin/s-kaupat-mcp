@@ -13,6 +13,20 @@ export function deliveryMethod(raw: string | null | undefined, isFastTrack: bool
   return "unknown";
 }
 
+/** How an order from this area reaches the user: collected or brought home. Null when not known. */
+export function handoverOf(area: { method: DeliveryMethod; handover?: "pickup" | "home_delivery" | null }): "pickup" | "home_delivery" | null {
+  if (area.method === "pickup" || area.method === "home_delivery") return area.method;
+  return area.handover ?? null;
+}
+
+/** The raw DeliveryMethod as a handover, for express areas. */
+export function rawHandover(raw: string | null | undefined): "pickup" | "home_delivery" | null {
+  const value = raw?.toUpperCase() ?? "";
+  if (value === "PICKUP") return "pickup";
+  if (value === "HOME_DELIVERY") return "home_delivery";
+  return null;
+}
+
 /** A slot's state from its isClosed flag, availability text and closing time. */
 export function slotStatus(
   isClosed: boolean | null | undefined,

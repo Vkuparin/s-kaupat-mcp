@@ -18,7 +18,7 @@ Install the newest `s-kaupat-<version>.mcpb`: Claude Desktop → Settings → Ex
 - [ ] Log out on the site in the server's window: the next list call answers `session_expired`, and `start_login` does not reuse the old login.
 
 ## 4. Choosing a pickup time and finishing on the site
-- [ ] Ask Claude for pickup options near your home address: `find_address` finds it and `get_delivery_options` shows Nouto, Kotiinkuljetus and Pikatoimitus with the site's own price summaries, the nearest pickup places and the stores delivering to you. Choose a home delivery time once too: the finishing text should say Kotiinkuljetus.
+- [ ] Ask Claude for pickup options near your home address: `find_address` finds it and `get_delivery_options` shows Nouto, Kotiinkuljetus and Pikatoimitus with the site's own price summaries, the nearest pickup places and the stores delivering to you. Choose a home delivery time once too: the finishing text should say Kotiinkuljetus. If a Pikatoimitus store is listed, ask for its times: `get_delivery_slots` with its `areaId` should return times (this has not been seen live yet), and `get_checkout_options` after choosing one should ask for the address and offer no invoice.
 - [ ] Pick a time, then "go to checkout": `open_site` opens S-kaupat logged in, and its header shows the same place and time (for example "Nouto: Prisma Herttoniemi noutolokero pe 9.10. 09.00–10.00"). The storage side of this was confirmed; the header was hidden by the cookie dialog of a fresh profile.
 - [ ] On your list there, "Lisää kaikki ostoskoriin" puts the products in the cart for that time. Don't check out.
 

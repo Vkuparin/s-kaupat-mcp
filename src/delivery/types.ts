@@ -42,6 +42,11 @@ export interface DeliveryArea {
   /** S-kaupat's own name for it, in Finnish. */
   name: string | null;
   method: DeliveryMethod;
+  /**
+   * For express (Pikatoimitus) areas: whether the order is collected ("pickup", Pikanouto) or brought
+   * home ("home_delivery"). Left out for other areas, where it is the same as method.
+   */
+  handover?: "pickup" | "home_delivery" | null;
   storeId: string | null;
   storeName: string | null;
   /** Base fee in euros as S-kaupat reports it; each slot may cost something else. */

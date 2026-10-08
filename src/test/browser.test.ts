@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import type { BrowserContext } from "playwright-core";
 import { createBrowserFetch } from "../browser/browser-fetch.js";
-import { launchProfile } from "../browser/launch.js";
+import { browserArgs, launchProfile } from "../browser/launch.js";
 import { type ApiPage, BrowserSession } from "../browser/session.js";
 import { HttpSKaupatClient } from "../client/http-client.js";
 import { SKaupatError } from "../errors.js";
@@ -222,4 +222,38 @@ test("a product search runs from inside the site's page, with the page's origin"
     site.close();
     api.close();
   }
+});
+
+test("the browser does not hide that software drives it", () => {
+  for (const minimized of [true, false]) {
+    const args = browserArgs({ profileDir: "p", headless: false, minimized, unavailableCode: "browser_unavailable", busyCode: "browser_busy" });
+    assert.ok(args.includes("--enable-automation"));
+    assert.ok(!args.some((a) => /AutomationControlled|user-agent/i.test(a)));
+  }
+});
+
+test("no network reads as unavailable, not blocked, and is not retried", async () => {
+  const { page, requests, reloads } = fakePage([{ ok: false, error: "offline" }]);
+  await assert.rejects(
+    createBrowserFetch({ page: async () => page, minIntervalMs: 0 })("https://api/", {}),
+    (e: SKaupatError) => e.code === "unavailable",
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(reloads(), 0);
+});
+
+test("a profile still held by a closing window is retried once", async () => {
+  let attempts = 0;
+  const c = fakeContext();
+  const session = new BrowserSession({
+    profileDir: "unused",
+    busyRetryMs: 1,
+    launch: async () => {
+      if (++attempts === 1) throw new SKaupatError("browser_busy", "busy");
+      return c.context;
+    },
+  });
+  await session.apiPage();
+  assert.equal(attempts, 2);
+  await session.close();
 });

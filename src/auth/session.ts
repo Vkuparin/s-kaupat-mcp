@@ -62,7 +62,10 @@ export class LiveAuth implements SKaupatAuth {
     } catch (err) {
       if (err instanceof SKaupatError && err.code === "session_expired") return { status: "expired", displayName: null };
       if (err instanceof SKaupatError && err.code === "login_required") return { status: "logged_out", displayName: null };
-      throw err;
+      // A saved login that S-kaupat has not rejected is still a login; a temporary problem (S-kaupat
+      // busy, browser not available) must not make the app show the user as logged out.
+      log.warn("Could not confirm the saved login", { code: err instanceof SKaupatError ? err.code : "unknown" });
+      return { status: "logged_in", displayName: this.displayName };
     }
   }
 
@@ -91,7 +94,10 @@ export class LiveAuth implements SKaupatAuth {
       return { status: "logged_in", displayName: current.displayName, alreadyLoggedIn: true };
     }
 
-    const result = await this.options.window.open(timeoutMs);
+    // The login window's profile keeps the site's storage between runs, so it may still hold the
+    // token S-kaupat just rejected. Tell the window to wait for a different one.
+    const stale = current?.status === "expired" ? await this.options.store.read() : null;
+    const result = await this.options.window.open(timeoutMs, stale ? [stale] : []);
     if (result.status !== "logged_in") {
       log.info("Login window closed without a login", { outcome: result.status });
       return { status: result.status, displayName: null, alreadyLoggedIn: false };

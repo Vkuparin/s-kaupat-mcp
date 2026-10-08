@@ -14,8 +14,10 @@ export interface BrowserSessionOptions {
   profileDir: string;
   startUrl?: string;
   executablePath?: string;
-  /** Close the browser after this long without API calls. Default 10 minutes. */
+  /** Close the browser after this long without API calls. Default 3 minutes. */
   idleMs?: number;
+  /** Wait before the one retry when the profile is busy. Default 2 s. */
+  busyRetryMs?: number;
   /** Opens the browser; replaced in tests. */
   launch?: () => Promise<BrowserContext>;
 }
@@ -85,7 +87,8 @@ export class BrowserSession {
   }
 
   private async start(): Promise<Page> {
-    const context = await (this.options.launch ??
+    const launch =
+      this.options.launch ??
       (() =>
         launchProfile({
           profileDir: this.options.profileDir,
@@ -94,7 +97,13 @@ export class BrowserSession {
           executablePath: this.options.executablePath,
           unavailableCode: "browser_unavailable",
           busyCode: "browser_busy",
-        })))();
+        }));
+    const context = await launch().catch(async (err) => {
+      // A window that was just closed can hold the profile for a moment; try once more.
+      if (!(err instanceof SKaupatError && err.code === "browser_busy")) throw err;
+      await new Promise((r) => setTimeout(r, this.options.busyRetryMs ?? 2_000));
+      return launch();
+    });
     this.context = context;
     context.on("close", () => {
       if (this.context === context) {
@@ -122,7 +131,7 @@ export class BrowserSession {
     this.idleTimer = setTimeout(() => {
       log.debug("Closing idle S-kaupat browser session");
       void this.close();
-    }, this.options.idleMs ?? 10 * 60_000);
+    }, this.options.idleMs ?? 3 * 60_000);
     this.idleTimer.unref();
   }
 }

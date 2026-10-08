@@ -291,3 +291,53 @@ test("the cart check maps the captured validateCart sample", async () => {
   assert.equal(checks.get("6414893386488")?.status, "ok");
   assert.equal(checks.get("0000000000000")?.status, "not_found");
 });
+
+test("changing a quantity never takes the product off the list, even when a write fails", async () => {
+  const client = new FixtureSKaupatClient(fixtures);
+  let list = await client.createList("t", "Testi", "fixture-store-1");
+  list = (await addItemsToList({
+    client,
+    lists: client,
+    withToken: (fn) => fn("t"),
+    storeId: "fixture-store-1",
+    list,
+    items: [{ productId: MILK, quantity: 1, allowSubstitutes: true }],
+  })).list;
+  const failing: ShoppingListApi = Object.assign(Object.create(client), {
+    addItem: async () => {
+      throw new SKaupatError("upstream_error", "down");
+    },
+  });
+  const result = await addItemsToList({
+    client,
+    lists: failing,
+    withToken: (fn) => fn("t"),
+    storeId: "fixture-store-1",
+    list,
+    items: [{ productId: MILK, quantity: 4, allowSubstitutes: true }],
+  });
+  // The old row is still there with the old quantity, so the change is reported as uncertain, not done.
+  assert.equal(result.results[0]?.status, "uncertain");
+  assert.deepEqual(result.list.items.map((i) => [i.productId, i.quantity]), [[MILK, 1]]);
+});
+
+test("a new list is returned even if no product could be written", async () => {
+  const client = new FixtureSKaupatClient(fixtures);
+  const list = await client.createList("t", "Uusi", "fixture-store-1");
+  const lists: ShoppingListApi = Object.assign(Object.create(client), {
+    addItem: async () => {
+      throw new SKaupatError("session_expired", "expired");
+    },
+  });
+  const result = await addItemsToList({
+    client,
+    lists,
+    withToken: (fn) => fn("t"),
+    storeId: "fixture-store-1",
+    list,
+    newList: true,
+    items: [{ productId: MILK, quantity: 1, allowSubstitutes: true }],
+  });
+  assert.equal(result.list.id, list.id);
+  assert.equal(result.results[0]?.status, "missing");
+});

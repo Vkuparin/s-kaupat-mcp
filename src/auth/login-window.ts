@@ -26,7 +26,8 @@ export type LoginWindowResult =
   | { status: "timed_out" };
 
 export interface LoginWindow {
-  open(timeoutMs: number): Promise<LoginWindowResult>;
+  /** `staleRefreshTokens`: tokens already known not to work, ignored if the site's storage still holds them. */
+  open(timeoutMs: number, staleRefreshTokens?: string[]): Promise<LoginWindowResult>;
 }
 
 export interface BrowserLoginWindowOptions {
@@ -42,7 +43,7 @@ export interface BrowserLoginWindowOptions {
 export class BrowserLoginWindow implements LoginWindow {
   constructor(private readonly options: BrowserLoginWindowOptions) {}
 
-  async open(timeoutMs: number): Promise<LoginWindowResult> {
+  async open(timeoutMs: number, staleRefreshTokens: string[] = []): Promise<LoginWindowResult> {
     const startUrl = this.options.startUrl ?? "https://www.s-kaupat.fi/";
     const origin = new URL(startUrl).origin;
     const context = await this.launch();
@@ -65,7 +66,7 @@ export class BrowserLoginWindow implements LoginWindow {
           if (!p.url().startsWith(origin)) continue;
           const entries = await p.evaluate(() => Object.entries(window.localStorage)).catch(() => []);
           const login = findLogin(entries);
-          if (login) return { status: "logged_in", login };
+          if (login && !staleRefreshTokens.includes(login.refreshToken)) return { status: "logged_in", login };
         }
         // Closing the last tab closes the window: treat it as the user cancelling.
         if (context.pages().length === 0) return { status: "cancelled" };
@@ -84,7 +85,7 @@ export class BrowserLoginWindow implements LoginWindow {
       headless: this.options.headless ?? false,
       executablePath: this.options.executablePath,
       unavailableCode: "login_window_unavailable",
-      busyCode: "login_window_unavailable",
+      busyCode: "browser_busy",
     });
   }
 }

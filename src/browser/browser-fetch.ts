@@ -53,11 +53,12 @@ export function createBrowserFetch(options: BrowserFetchOptions): typeof fetch {
     let result = await send(request);
     if (refused(result)) {
       log.warn("S-kaupat refused a request from the page; reloading once", { detail: describe(result) });
-      await (await options.page()).reload().catch(() => {});
+      await withTimeout((await options.page()).reload(), timeoutMs).catch(() => {});
       result = await send(request);
     }
     if (!result.ok) {
       if (/timed out/i.test(result.error)) throw new SKaupatError("unavailable", "S-kaupat did not respond in time.");
+      if (result.error === OFFLINE) throw new SKaupatError("unavailable", "The computer is not connected to the internet.");
       throw new SKaupatError("blocked", `The request from the S-kaupat page failed: ${result.error}`);
     }
     return new Response(result.body, {
@@ -89,8 +90,19 @@ function pageHeaders(headers: HeadersInit | undefined): Record<string, string> {
   return out;
 }
 
+/** The in-page error for "the browser has no network"; it must match the literal in inPageFetch. */
+const OFFLINE = "offline";
+
 function refused(result: InPageResult): boolean {
-  return result.ok ? result.status === 403 || result.status === 429 : !/timed out/i.test(result.error);
+  return result.ok ? result.status === 403 || result.status === 429 : !/timed out/i.test(result.error) && result.error !== OFFLINE;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => (timer = setTimeout(() => reject(new Error("timed out")), ms))),
+  ]).finally(() => clearTimeout(timer));
 }
 
 function describe(result: InPageResult): string {
@@ -111,7 +123,9 @@ async function inPageFetch(req: InPageRequest): Promise<InPageResult> {
     return { ok: true, status: res.status, contentType: res.headers.get("content-type"), body: await res.text() };
   } catch (err) {
     const aborted = err instanceof DOMException && err.name === "AbortError";
-    return { ok: false, error: aborted ? "timed out" : String(err) };
+    if (aborted) return { ok: false, error: "timed out" };
+    // A failed fetch with no network is the user's connection, not S-kaupat refusing the call.
+    return { ok: false, error: navigator.onLine ? String(err) : "offline" };
   } finally {
     clearTimeout(timer);
   }

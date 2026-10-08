@@ -413,7 +413,22 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const store = resolveStoreId(storeId);
         const lists = requireLists();
         const list = await withToken((t) => lists.createList(t, name, store));
-        const result = await addItemsToList({ client, lists, withToken, storeId: store, list, items });
+        // The list exists now: whatever happens with the products, the caller gets the list back.
+        const result = await addItemsToList({ client, lists, withToken, storeId: store, list, items, newList: true }).catch(
+          (err): ListWriteResult => {
+            const e = toSKaupatError(err);
+            return {
+              list,
+              results: items.map((i) => ({
+                productId: i.productId,
+                requestedQuantity: i.quantity,
+                status: "missing",
+                name: null,
+                error: { code: e.code, reason: "write_failed", userMessage: USER_MESSAGES[e.code] },
+              })),
+            };
+          },
+        );
         return listWriteView(result);
       }),
   );

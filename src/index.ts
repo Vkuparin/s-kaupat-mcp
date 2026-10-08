@@ -60,8 +60,10 @@ function createLive(): Live {
     lockPath,
     api: new HttpAuthApi({ fetchImpl }),
     // The login window needs the profile the API session has open: close that while the user logs in.
-    window: browser ? { open: (ms) => browser.whileClosed(() => loginWindow.open(ms)) } : loginWindow,
-    backgroundRenewal: true,
+    window: browser ? { open: (ms, stale) => browser.whileClosed(() => loginWindow.open(ms, stale)) } : loginWindow,
+    // With the browser transport, renewing in the background would open the S-kaupat window while
+    // nobody uses it; the login is renewed on the next call instead.
+    backgroundRenewal: !browser,
   });
   return { client: new HttpSKaupatClient({ fetchImpl }), auth, browser };
 }

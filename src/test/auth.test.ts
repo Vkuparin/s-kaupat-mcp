@@ -45,9 +45,11 @@ class RotatingApi implements AuthApi {
 
 class FakeWindow implements LoginWindow {
   opened = 0;
+  stale: string[] = [];
   constructor(private readonly result: LoginWindowResult) {}
-  async open(): Promise<LoginWindowResult> {
+  async open(_timeoutMs: number, stale: string[] = []): Promise<LoginWindowResult> {
     this.opened++;
+    this.stale = stale;
     await new Promise((r) => setTimeout(r, 20));
     return this.result;
   }
@@ -143,6 +145,8 @@ test("start_login after expiry replaces the rejected token", async () => {
   assert.equal((await auth.status()).status, "expired");
   assert.equal((await auth.startLogin({ timeoutSeconds: 60 })).status, "logged_in");
   assert.equal((await auth.status()).status, "logged_in");
+  // The window profile may still hold the rejected token; the window is told to wait for a new one.
+  assert.deepEqual(window.stale, ["refresh-old"]);
 });
 
 test("cancelled login stores nothing", async () => {
@@ -263,4 +267,12 @@ test("start_login reports success when the login is saved but the name lookup is
   const result = await auth.startLogin({ timeoutSeconds: 60 });
   assert.deepEqual(result, { status: "logged_in", displayName: null, alreadyLoggedIn: false });
   assert.equal(await store.read(), "refresh-1");
+});
+
+test("a temporary problem renewing a saved login does not read as logged out", async () => {
+  const { auth, api } = await setup("refresh-1");
+  api.refresh = async () => {
+    throw new SKaupatError("unavailable", "S-kaupat did not respond in time.");
+  };
+  assert.equal((await auth.status()).status, "logged_in");
 });

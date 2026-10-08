@@ -60,6 +60,8 @@ export async function addItemsToList(options: {
   storeId: string;
   list: ShoppingList;
   items: RequestedItem[];
+  /** The list was created for this call: report a failed first write per item instead of throwing, so the caller still gets the new list. */
+  newList?: boolean;
 }): Promise<ListWriteResult> {
   const { client, lists, withToken, storeId } = options;
   let list = options.list;
@@ -71,6 +73,7 @@ export async function addItemsToList(options: {
   const checks = await tryCheckBasket(client, storeId, items);
 
   const results: ItemOutcome[] = [];
+  const wasOnList = new Set(list.items.map((i) => i.productId));
   let stop: SKaupatError | null = null;
 
   for (const req of items) {
@@ -94,8 +97,8 @@ export async function addItemsToList(options: {
     }
 
     try {
-      // S-kaupat's item update input is not mapped yet, so a change is a remove and a re-add.
-      if (existing) list = await withToken((t) => lists.removeItem(t, list.id, existing.itemId, storeId));
+      // S-kaupat's item update input is not mapped yet, so a change is an add followed by removing
+      // the old row. Adding first means a failure never leaves the product off the list.
       list = await withToken((t) =>
         lists.addItem(
           t,
@@ -110,8 +113,11 @@ export async function addItemsToList(options: {
           storeId,
         ),
       );
+      if (existing && list.items.some((i) => i.productId === req.productId && i.itemId !== existing.itemId)) {
+        list = await withToken((t) => lists.removeItem(t, list.id, existing.itemId, storeId));
+      }
       const written = list.items.find((i) => i.productId === req.productId);
-      if (written) {
+      if (written && matches(written, req)) {
         results.push({ ...base, status: existing ? "updated" : "added", item: written, ...warningFor(check) });
       } else {
         results.push({ ...base, status: "uncertain", name: found.product.name, error: itemError("write_uncertain") });
@@ -121,7 +127,7 @@ export async function addItemsToList(options: {
       log.warn("Shopping list write failed", { code: e.code, productId: req.productId });
       if (e.code === "login_required" || e.code === "session_expired" || e.code === "list_not_found") {
         // Nothing more can be written; report this and the rest as missing with the reason.
-        if (results.length === 0) throw e;
+        if (results.length === 0 && !options.newList) throw e;
         stop = e;
         results.push({ ...base, status: "missing", name: found.product.name, error: itemError(e.code, "write_failed") });
       } else {
@@ -136,12 +142,22 @@ export async function addItemsToList(options: {
     if (fresh) {
       list = fresh;
       for (const [i, r] of results.entries()) {
-        const item = r.status === "uncertain" ? fresh.items.find((x) => x.productId === r.productId) : undefined;
-        if (item) results[i] = { productId: r.productId, requestedQuantity: r.requestedQuantity, status: "added", item };
+        if (r.status !== "uncertain") continue;
+        const req = items.find((x) => x.productId === r.productId)!;
+        const rows = fresh.items.filter((x) => x.productId === r.productId);
+        // Only a single row exactly as requested proves the write went through.
+        if (rows.length === 1 && matches(rows[0]!, req)) {
+          const status = wasOnList.has(r.productId) ? "updated" : "added";
+          results[i] = { productId: r.productId, requestedQuantity: r.requestedQuantity, status, item: rows[0]!, ...warningFor(checks.get(r.productId)) };
+        }
       }
     }
   }
   return { list, results };
+}
+
+function matches(item: ShoppingListItem, req: RequestedItem): boolean {
+  return item.quantity === req.quantity && item.allowSubstitutes === req.allowSubstitutes;
 }
 
 function mergeDuplicates(items: RequestedItem[]): RequestedItem[] {

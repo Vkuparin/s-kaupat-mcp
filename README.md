@@ -210,7 +210,7 @@ Every tool sends its own GraphQL query text to `api.s-kaupat.fi`; no persisted-q
 
 **The calls come from a browser window.** Since 7 October 2026 S-kaupat's API answers plain scripts with `403`, while it answers its own website. So by default (`SKAUPAT_TRANSPORT=browser`) the server keeps one Microsoft Edge (or Chrome) window with its own profile, started **minimised in the taskbar**, with the S-kaupat site open, and sends each API call from inside that page, the way the website does. It is a normal browser window that does not disguise itself.
 
-- The window opens on the first S-kaupat call and closes itself after 10 minutes without calls. Closing it by hand is fine; the next call opens it again.
+- The window opens on the first S-kaupat call and closes itself after 3 minutes without calls. Closing it by hand is fine; the next call opens it again.
 - It uses the same profile as the login window (`%LOCALAPPDATA%\s-kaupat-mcp\login-browser` on Windows), so treat that folder like a password. While the login window is open, other tools answer `login_in_progress`.
 - Calls go one at a time, at least half a second apart. If S-kaupat refuses a call, the page is reloaded once and the call retried once; after that the tool answers `blocked`.
 - Only one copy of the server can have the window open at a time. A second app running its own copy gets `browser_busy` until the first one's window closes.

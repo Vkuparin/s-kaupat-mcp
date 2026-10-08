@@ -38,8 +38,9 @@ export async function launchProfile(options: LaunchOptions): Promise<BrowserCont
         ...candidate,
         headless: options.headless,
         viewport: null,
-        // Playwright's default flags tune the browser for test automation, including
-        // --enable-automation. This is a plain browser, so only the flags it needs are passed.
+        // Playwright's default flags tune the browser for test runs; only the flags this window
+        // needs are passed. --enable-automation stays (see browserArgs): the window does not hide
+        // that it is driven by software.
         ignoreDefaultArgs: true,
         args: browserArgs(options),
       });
@@ -57,10 +58,12 @@ export async function launchProfile(options: LaunchOptions): Promise<BrowserCont
   );
 }
 
-function browserArgs({ profileDir, headless, minimized }: LaunchOptions): string[] {
+export function browserArgs({ profileDir, headless, minimized }: LaunchOptions): string[] {
   return [
     `--user-data-dir=${profileDir}`,
     "--remote-debugging-pipe",
+    // Kept on purpose: the browser shows it is software-driven (navigator.webdriver, the infobar).
+    "--enable-automation",
     "--window-size=520,820",
     "--no-first-run",
     "--no-default-browser-check",

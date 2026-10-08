@@ -507,12 +507,13 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi {
       if (authenticated && errors.data.errors.some((e) => AUTH_ERROR_CODES.includes(e.extensions?.code ?? ""))) {
         throw new SKaupatError("session_expired", `S-kaupat did not accept the login for ${operationName}.`);
       }
-      const productError = errors.data.errors.find(isProductUnavailableError);
-      if (productError) {
-        throw new SKaupatError("product_unavailable", productError.message ?? "Product is not available.");
-      }
-      // Partial data with errors is still usable; fall through when data exists.
+      // Partial data with errors is still usable (e.g. one product of many missing); only fail
+      // when there is no data at all.
       if (!(body as { data?: unknown }).data) {
+        const productError = errors.data.errors.find(isProductUnavailableError);
+        if (productError) {
+          throw new SKaupatError("product_unavailable", productError.message ?? "Product is not available.");
+        }
         throw new SKaupatError("upstream_error", first?.message ?? "S-kaupat returned a GraphQL error.");
       }
     }
@@ -682,7 +683,8 @@ const ApiListItemSchema = z
     name: z.string().nullish(),
     quantity: z.number().nullish(),
     isReplaceable: z.boolean().nullish(),
-    product: ApiProductSchema.nullish(),
+    // A product S-kaupat can't fully describe must not hide the row itself.
+    product: ApiProductSchema.nullish().catch(null),
   })
   .passthrough();
 

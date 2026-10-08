@@ -2,6 +2,10 @@
 
 The server follows [semantic versioning](https://semver.org/) from 1.0.0. What counts as a breaking change is in [docs/embedding.md](docs/embedding.md#versions).
 
+## 1.0.0
+
+The first stable release: tool names, inputs, result fields and error codes stay compatible across 1.x (see [docs/embedding.md](docs/embedding.md#versions)). Same code as 1.0.0-rc.1, after it was checked on a real Windows PC: the extension, the live site (search, stores, lists, delivery choice, order review, order history) and the standalone exe. The known limits below still apply.
+
 ## 1.0.0-rc.1
 
 First release candidate for 1.0.0. Nothing in the tools changed shape since 0.12.2; this release fixes the contract.

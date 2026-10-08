@@ -440,7 +440,7 @@ test("the HTTP client maps address search, delivery methods and nearby pickup pl
   const [locker, address] = await client.findAddresses('Testikatu "1"');
   assert.equal(locker!.areaId, "22595800");
   assert.equal(address!.areaId, null);
-  assert.match(sent[0].query, /addressAutosuggest\(countryCode: "FI", query: "Testikatu \\"1\\"", searchContext: DELIVERY_METHOD_SELECTION\)/);
+  assert.match(sent[0].query, /addressAutosuggest\(countryCode: "FIN", query: "Testikatu \\"1\\"", searchContext: DELIVERY_METHOD_SELECTION\)/);
   assert.equal(address!.postalCode, "00930");
   const location = { postalCode: address!.postalCode!, latitude: address!.latitude!, longitude: address!.longitude! };
 

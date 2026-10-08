@@ -11,7 +11,7 @@ import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./se
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.4.0";
+export const SERVER_VERSION = "0.4.1";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.2";
 

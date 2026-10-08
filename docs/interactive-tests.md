@@ -5,7 +5,7 @@ Everything below needs a Windows PC with Edge, a real S-kaupat account and the n
 Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 
 ## 1. Extension install
-- [ ] Double-click `s-kaupat-0.4.0.mcpb`; Claude Desktop shows the install dialog with the Demo mode switch.
+- [x] Install `s-kaupat-0.4.1.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
 - [ ] With Demo mode on, "find milk" works with no browser window and no login.
 - [ ] Turn Demo mode off and restart Claude Desktop.
 

@@ -113,7 +113,12 @@ export class BrowserSession {
     });
     try {
       const page = context.pages()[0] ?? (await context.newPage());
+      // Edge does not always honour --start-minimized (for example when it restores the profile's last
+      // window), so the window is also minimised through the browser's own window controls.
+      await minimize(context, page);
       await page.goto(this.startUrl, { waitUntil: "domcontentloaded" });
+      // Edge may open its own start tab or restore old ones; one S-kaupat tab is all the window needs.
+      for (const other of context.pages()) if (other !== page) await other.close().catch(() => {});
       this.page = page;
       log.info("S-kaupat browser session started");
       return page;
@@ -133,5 +138,17 @@ export class BrowserSession {
       void this.close();
     }, this.options.idleMs ?? 3 * 60_000);
     this.idleTimer.unref();
+  }
+}
+
+/** Minimises the page's window via the DevTools protocol. Best effort: a visible window still works. */
+async function minimize(context: BrowserContext, page: Page): Promise<void> {
+  try {
+    const cdp = await context.newCDPSession(page);
+    const { windowId } = (await cdp.send("Browser.getWindowForTarget")) as { windowId: number };
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "minimized" } });
+    await cdp.detach().catch(() => {});
+  } catch (err) {
+    log.debug("Could not minimise the S-kaupat window", { message: err instanceof Error ? err.message : String(err) });
   }
 }

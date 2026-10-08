@@ -14,7 +14,7 @@ import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.
 import { prefillEntries, readSiteChoice, type SitePrefill } from "./browser/site-state.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.7.0";
+export const SERVER_VERSION = "0.8.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -60,7 +60,7 @@ export const SERVER_INSTRUCTIONS = [
   "2. Search with search_products (queries in Finnish work best, e.g. 'maito', 'ruisleipä') or browse with list_categories and browse_category.",
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
-  "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Home delivery and express times are picked on the site.",
+  "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Pikatoimitus (express) is ordered on the site.",
   "6. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the site asks for the store and pickup or delivery; nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in. These tools never place orders, reserve times or pay.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
@@ -608,8 +608,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       description:
         "Searches addresses the way the site's 'Valitse toimitustapa' search box does: a street address with the " +
         "city works best, e.g. 'Mannerheimintie 1, Helsinki' (a city name alone finds nothing). Each match has a " +
-        "title to show and a location (postalCode, latitude, longitude) to pass to get_delivery_options. Matches can " +
-        "also be pickup places (kind 'place', with an areaId for get_delivery_slots). The " +
+        "title to show and a location (postalCode, latitude, longitude) to pass to get_delivery_options. Street " +
+        "addresses (kind houseNumber or street) come first; S-kaupat also suggests pickup places (kind place). The " +
         "address is not saved by this server; the app may keep it for the user.",
       inputSchema: {
         query: z.string().trim().min(3).max(120).describe("What the user typed, e.g. 'Kauppakartanonkatu 7, Helsinki'."),
@@ -626,7 +626,6 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
           postalCode: a.postalCode,
           city: a.city,
           kind: a.kind,
-          areaId: a.areaId,
           location:
             a.postalCode && a.latitude != null && a.longitude != null
               ? { postalCode: a.postalCode, latitude: a.latitude, longitude: a.longitude }
@@ -649,9 +648,11 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         "Ways to get an order, for the first step of choosing a time (the site's 'Valitse toimitustapa'). " +
         "Without location: the pickup places of the user's store. With location (from find_address): which " +
         "methods are offered there (pickup, home_delivery, express, each with S-kaupat's own Finnish summary such " +
-        "as '8,90–14,90 €, huomenna') and the pickup places nearest to it with distanceMeters and the next free time. " +
-        "Each option has an areaId for get_delivery_slots and nextSlot, so the app can show 'next free: tomorrow " +
-        "10–12' at once. Home delivery and express times are chosen on the site for now (siteOnlyMethods).",
+        "as '8,90–14,90 € • Huomenna'); pickupOptions, the pickup places nearest to it with distanceMeters; " +
+        "homeDeliveryOptions, the stores delivering there; and expressStores, stores that deliver within about an " +
+        "hour. Each pickup and home delivery option has an areaId for get_delivery_slots and nextSlot, so the app " +
+        "can show 'next free: tomorrow 10–12' at once. Express (Pikatoimitus) is ordered on the site for now " +
+        "(siteOnlyMethods).",
       inputSchema: {
         storeId,
         location: z
@@ -666,7 +667,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
           .optional()
-          .describe("Day whose pickup times give nextSlot with a location. Default today."),
+          .describe("First day of the times counted with a location (freeTimesOnDate). Default today."),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
@@ -675,28 +676,41 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         if (location) {
           const api = requireDelivery();
           const day = date ?? finnishDate(now());
-          // Either half is useful alone; fail only when both fail.
-          const [methodsResult, placesResult] = await Promise.allSettled([
+          // Each part is useful alone; fail only when all fail.
+          const [methodsResult, pickupResult, homeResult] = await Promise.allSettled([
             api.getDeliveryMethods(location),
             api.getPickupPlacesNear(location, day, 8),
+            api.getHomeDeliveryNear(location.postalCode, day, dateRange(day, 3)[2]!),
           ]);
-          if (methodsResult.status === "rejected" && placesResult.status === "rejected") throw placesResult.reason;
-          for (const r of [methodsResult, placesResult]) {
-            if (r.status === "rejected") log.warn("Part of the delivery options failed", { message: String(r.reason?.message ?? r.reason) });
+          const results = { methods: methodsResult, pickup: pickupResult, homeDelivery: homeResult };
+          const failed = Object.entries(results).filter(([, r]) => r.status === "rejected");
+          if (failed.length === 3) throw (pickupResult as PromiseRejectedResult).reason;
+          for (const [part, r] of failed) {
+            log.warn("Part of the delivery options failed", { part, message: String((r as PromiseRejectedResult).reason?.message ?? (r as PromiseRejectedResult).reason) });
           }
-          const methods = methodsResult.status === "fulfilled" ? methodsResult.value : [];
-          const places = placesResult.status === "fulfilled" ? placesResult.value : [];
-          const options = places.map((p) => ({ ...p.area, distanceMeters: p.distanceMeters, freeTimesOnDate: p.slots.filter((x) => x.status === "available").length }));
+          const answer = methodsResult.status === "fulfilled" ? methodsResult.value : { methods: [], expressStores: [] };
+          const onDay = (slots: DeliverySlot[]) => slots.filter((x) => x.date === day && x.status === "available").length;
+          const pickupOptions = (pickupResult.status === "fulfilled" ? pickupResult.value : []).map((p) => ({
+            ...p.area,
+            distanceMeters: p.distanceMeters,
+            freeTimesOnDate: onDay(p.slots),
+            expressTimesOnDate: onDay(p.expressSlots),
+          }));
+          const homeDeliveryOptions = (homeResult.status === "fulfilled" ? homeResult.value : []).map((h) => ({
+            ...h.area,
+            freeTimesOnDate: onDay(h.slots),
+            expressTimesOnDate: onDay(h.expressSlots),
+          }));
           return {
             location: { postalCode: location.postalCode },
             date: day,
             selectedAreaId: selection.getDelivery()?.area.areaId ?? null,
-            methods,
-            options,
-            ...(methodsResult.status === "rejected" || placesResult.status === "rejected"
-              ? { partial: { methods: methodsResult.status === "rejected", pickupPlaces: placesResult.status === "rejected" } }
-              : {}),
-            siteOnlyMethods: methods.filter((m) => m.method !== "pickup" && m.available !== false).map((m) => m.method),
+            methods: answer.methods,
+            pickupOptions,
+            homeDeliveryOptions,
+            expressStores: answer.expressStores,
+            ...(failed.length > 0 ? { partial: Object.fromEntries(failed.map(([part]) => [part, true])) } : {}),
+            siteOnlyMethods: answer.methods.filter((m) => m.method === "express" && m.available !== false).map((m) => m.method),
           };
         }
         const store = resolveStoreId(storeId);

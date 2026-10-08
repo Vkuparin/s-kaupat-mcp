@@ -97,6 +97,52 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
   },
 };
 
+/**
+ * What the app should offer the user next, so it can pick the right button
+ * without a table of codes:
+ * - log_in: show the "Log in" button (start_login).
+ * - finish_login: the login window is open; wait for the user, then retry.
+ * - choose_store: show the store picker (search_stores, select_store).
+ * - retry: try again shortly; nothing for the user to fix.
+ * - check_list: show the list again (get_shopping_list) so the user sees what is on it.
+ * - refresh_lists: the list is gone; show the lists again (get_shopping_lists).
+ * - choose_other_product: offer another product.
+ * - install_browser: the PC needs Microsoft Edge or Google Chrome.
+ * - none: nothing the user can do now (a bug in the request, or a missing feature).
+ */
+export type ErrorAction =
+  | "log_in"
+  | "finish_login"
+  | "choose_store"
+  | "retry"
+  | "check_list"
+  | "refresh_lists"
+  | "choose_other_product"
+  | "install_browser"
+  | "none";
+
+export const ERROR_ACTIONS: Record<ErrorCode, { action: ErrorAction; retryable: boolean }> = {
+  invalid_argument: { action: "none", retryable: false },
+  login_required: { action: "log_in", retryable: false },
+  session_expired: { action: "log_in", retryable: false },
+  login_window_unavailable: { action: "install_browser", retryable: false },
+  login_in_progress: { action: "finish_login", retryable: true },
+  browser_unavailable: { action: "install_browser", retryable: false },
+  browser_busy: { action: "retry", retryable: true },
+  store_not_selected: { action: "choose_store", retryable: false },
+  store_not_found: { action: "choose_store", retryable: false },
+  product_unavailable: { action: "choose_other_product", retryable: false },
+  list_not_found: { action: "refresh_lists", retryable: false },
+  blocked: { action: "retry", retryable: true },
+  invalid_quantity: { action: "none", retryable: false },
+  context_changed: { action: "retry", retryable: true },
+  unavailable: { action: "retry", retryable: true },
+  conflict: { action: "retry", retryable: true },
+  unsupported: { action: "none", retryable: false },
+  write_uncertain: { action: "check_list", retryable: false },
+  upstream_error: { action: "retry", retryable: true },
+};
+
 export class SKaupatError extends Error {
   constructor(
     readonly code: ErrorCode,

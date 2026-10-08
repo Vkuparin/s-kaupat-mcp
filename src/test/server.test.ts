@@ -49,6 +49,7 @@ test("lists the catalogue, store, login and shopping list tools", async () => {
     "get_product_details",
     "get_products",
     "get_selected_store",
+    "get_setup_status",
     "get_shopping_list",
     "get_shopping_lists",
     "list_categories",
@@ -302,4 +303,46 @@ test("the Claude Desktop extension manifest lists exactly the server's tools", a
   assert.deepEqual(manifest.tools.map((t: any) => t.name).sort(), tools.map((t) => t.name).sort());
   assert.equal(manifest.version, pkg.version);
   assert.equal(manifest.version, SERVER_VERSION);
+});
+
+test("get_setup_status walks an app through first run: store, then login, then ready", async () => {
+  const mcp = await connect();
+  let { data } = await call(mcp, "get_setup_status", {});
+  assert.equal(data.mode, "live");
+  assert.equal(data.store, null);
+  assert.equal(data.nextStep, "choose_store");
+  assert.equal(data.canSearch, false);
+
+  await call(mcp, "select_store", { storeId: "fixture-store-1" });
+  ({ data } = await call(mcp, "get_setup_status", {}));
+  assert.equal(data.store.id, "fixture-store-1");
+  assert.deepEqual([data.canSearch, data.canUseLists, data.nextStep], [true, false, "log_in"]);
+
+  await call(mcp, "start_login", {});
+  ({ data } = await call(mcp, "get_setup_status", {}));
+  assert.deepEqual([data.login.status, data.canUseLists, data.nextStep], ["logged_in", true, null]);
+});
+
+test("get_setup_status still answers when the login check fails", async () => {
+  const auth = new FixtureAuth();
+  auth.status = async () => {
+    throw new SKaupatError("unavailable", "down");
+  };
+  const { isError, data } = await call(await connect(undefined, { auth }), "get_setup_status", {});
+  assert.equal(isError, false);
+  assert.equal(data.login.status, "unknown");
+});
+
+test("every error tells the app what to offer next", async () => {
+  const { data } = await call(await connect(), "search_products", { query: "maito" });
+  assert.equal(data.error.code, "store_not_selected");
+  assert.equal(data.error.action, "choose_store");
+  assert.equal(data.error.retryable, false);
+});
+
+test("the server tells the model the intended flow", async () => {
+  const mcp = await connect();
+  const instructions = mcp.getInstructions() ?? "";
+  assert.match(instructions, /get_setup_status/);
+  assert.match(instructions, /never on your own/);
 });

@@ -71,7 +71,11 @@ function createLive(): Live {
 async function main(): Promise<void> {
   const selection = new FileStoreSelection(process.env.SKAUPAT_SETTINGS_FILE ?? defaultSettingsPath());
   const { client, auth, browser } = createLive();
-  const server = createServer(client, auth, { selection, lists: client });
+  const server = createServer(client, auth, {
+    selection,
+    lists: client,
+    mode: serverMode() === "fixtures" ? "demo" : "live",
+  });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log.info(`s-kaupat-mcp ${SERVER_VERSION} ready on stdio`);

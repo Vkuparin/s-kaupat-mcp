@@ -3,7 +3,7 @@ import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { HttpAuthApi, type AuthApi, type AuthTokens, type UserProfile } from "../auth/auth-api.js";
+import { accountIdFor, HttpAuthApi, type AuthApi, type AuthTokens, type UserProfile } from "../auth/auth-api.js";
 import { withFileLock } from "../auth/file-lock.js";
 import { findLogin, type LoginWindow, type LoginWindowResult } from "../auth/login-window.js";
 import { jwtExpiry, LiveAuth } from "../auth/session.js";
@@ -39,7 +39,7 @@ class RotatingApi implements AuthApi {
   async userProfile(accessToken: string): Promise<UserProfile> {
     this.profileCalls++;
     if (this.rejectAccess.has(accessToken)) throw new SKaupatError("session_expired", "access rejected");
-    return { firstName: "Ville", lastName: "Testinen" };
+    return { firstName: "Ville", lastName: "Testinen", userId: "12345" };
   }
 }
 
@@ -66,13 +66,13 @@ async function setup(initialToken: string | null, window: LoginWindow = new Fake
 
 test("no stored token reads as logged_out without any network call", async () => {
   const { auth, api } = await setup(null);
-  assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null });
+  assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null, accountId: null });
   assert.equal(api.refreshCalls, 0);
 });
 
 test("stored token renews, saves the rotated refresh token and reports the first name", async () => {
   const { auth, api, store } = await setup("refresh-1");
-  assert.deepEqual(await auth.status(), { status: "logged_in", displayName: "Ville" });
+  assert.deepEqual(await auth.status(), { status: "logged_in", displayName: "Ville", accountId: accountIdFor("12345") });
   assert.equal(await store.read(), api.valid);
   // Cached access token: no second renewal.
   await auth.getAccessToken();
@@ -118,7 +118,7 @@ test("start_login stores only the refresh token and returns the name", async () 
   });
   const { auth, store, api } = await setup(null, window);
   const result = await auth.startLogin({ timeoutSeconds: 60 });
-  assert.deepEqual(result, { status: "logged_in", displayName: "Ville", alreadyLoggedIn: false });
+  assert.deepEqual(result, { status: "logged_in", displayName: "Ville", accountId: accountIdFor("12345"), alreadyLoggedIn: false });
   assert.equal(await store.read(), "refresh-1");
   // The captured access token was used directly, without renewing.
   assert.equal(api.refreshCalls, 0);
@@ -265,7 +265,7 @@ test("start_login reports success when the login is saved but the name lookup is
     throw new SKaupatError("blocked", "S-kaupat refused the request (HTTP 403).");
   };
   const result = await auth.startLogin({ timeoutSeconds: 60 });
-  assert.deepEqual(result, { status: "logged_in", displayName: null, alreadyLoggedIn: false });
+  assert.deepEqual(result, { status: "logged_in", displayName: null, accountId: null, alreadyLoggedIn: false });
   assert.equal(await store.read(), "refresh-1");
 });
 
@@ -293,7 +293,7 @@ test("log out forgets the stored login and clears the browser profile's session"
   await auth.logout();
   assert.equal(await store.read(), null);
   assert.equal(forgotten, 1);
-  assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null });
+  assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null, accountId: null });
   await assert.rejects(auth.getAccessToken(), (e: SKaupatError) => e.code === "login_required");
 });
 
@@ -314,4 +314,20 @@ test("after one app logs out and in as someone else, another app stops using the
   await appA.startLogin({ timeoutSeconds: 60 });
   assert.deepEqual(window.stale, ["refresh-2"]);
   assert.notEqual(await appB.getAccessToken(), oldToken);
+});
+
+test("the account ID is stable per account, differs between accounts and hides S-kaupat's own ID", async () => {
+  assert.equal(accountIdFor("12345"), accountIdFor("12345"));
+  assert.notEqual(accountIdFor("12345"), accountIdFor("12346"));
+  assert.match(accountIdFor("12345"), /^sk_[0-9a-f]{32}$/);
+  assert.ok(!accountIdFor("12345").includes("12345"));
+  const api = new HttpAuthApi({ fetchImpl: fetchReturning({ data: { userProfile: { firstName: "Ville", lastName: null, userId: "u-1" } } }) });
+  assert.equal((await api.userProfile("t")).userId, "u-1");
+});
+
+test("logging out clears the account ID", async () => {
+  const { auth } = await setup("refresh-1");
+  assert.equal((await auth.status()).accountId, accountIdFor("12345"));
+  await auth.logout();
+  assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null, accountId: null });
 });

@@ -232,12 +232,15 @@ test("fixture login: logged out, then start_login, then logged in", async () => 
   assert.ok(login.data.userMessage.fi && login.data.userMessage.en);
   const status = await call(mcp, "login_status", {});
   assert.deepEqual([status.data.status, status.data.displayName], ["logged_in", "Testi"]);
+  assert.match(status.data.accountId, /^sk_[0-9a-f]{32}$/);
+  const setup = await call(mcp, "get_setup_status", {});
+  assert.equal(setup.data.login.accountId, status.data.accountId);
 });
 
 test("start_login reports cancelled with a message to show", async () => {
   const auth: SKaupatAuth = {
-    status: async () => ({ status: "logged_out", displayName: null }),
-    startLogin: async () => ({ status: "cancelled", displayName: null, alreadyLoggedIn: false }),
+    status: async () => ({ status: "logged_out", displayName: null, accountId: null }),
+    startLogin: async () => ({ status: "cancelled", displayName: null, accountId: null, alreadyLoggedIn: false }),
     getAccessToken: async () => assert.fail(),
     logout: async () => {},
   };

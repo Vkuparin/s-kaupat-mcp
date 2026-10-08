@@ -18,7 +18,7 @@ import { MemoryOrderStore, type OrderStore } from "./checkout/order-store.js";
 import { OrderReviews } from "./checkout/reviews.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "1.0.0";
+export const SERVER_VERSION = "1.1.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "1.0";
 
@@ -110,13 +110,13 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     async () =>
       run("get_setup_status", async () => {
         const store = selection.get() ?? null;
-        let login: { status: string; displayName: string | null };
+        let login: { status: string; displayName: string | null; accountId: string | null };
         try {
           login = await auth.status();
         } catch (err) {
           // Login state is one part of the answer; a hiccup there must not hide the rest.
           log.warn("Could not read the login status", { code: toSKaupatError(err).code });
-          login = { status: "unknown", displayName: null };
+          login = { status: "unknown", displayName: null, accountId: null };
         }
         // "unknown" counts as logged in: a list call will say if it is not, and the app shouldn't nag.
         const loggedIn = login.status === "logged_in" || login.status === "unknown";
@@ -125,7 +125,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         return {
           mode: options.mode ?? "live",
           store: store ? { id: store.id, name: store.name, chainName: store.chainName } : null,
-          login: { status: login.status, displayName: login.displayName },
+          login: { status: login.status, displayName: login.displayName, accountId: login.accountId },
           // Optional: null until the user picks a time. An expired choice asks for a new one.
           delivery: delivery ? deliveryView(delivery, now()) : null,
           canSearch: store !== null,
@@ -283,7 +283,9 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       title: "S-kaupat login status",
       description:
         "Whether the user is logged in to S-kaupat on this device: logged_in (with the account holder's name), " +
-        "logged_out or expired. Never opens a window. Catalogue tools work without logging in.",
+        "logged_out or expired. accountId is a stable ID for the logged-in S-kaupat account (the same on any device, " +
+        "different for another account; null when logged out), for keeping the app's own data per account. " +
+        "Never opens a window. Catalogue tools work without logging in.",
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: true },
     },

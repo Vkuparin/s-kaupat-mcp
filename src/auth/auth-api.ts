@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { SKaupatError } from "../errors.js";
 
 /**
@@ -17,6 +18,8 @@ export interface AuthTokens {
 export interface UserProfile {
   firstName: string | null;
   lastName: string | null;
+  /** S-kaupat's own ID for the account. Not shown to apps as is: see accountIdFor. */
+  userId: string | null;
 }
 
 export interface AuthApi {
@@ -34,7 +37,7 @@ export interface HttpAuthApiOptions {
 
 const REFRESH_QUERY =
   "query GetRemoteAuthenticationTokens($refreshToken: String) { authTokens(refreshToken: $refreshToken) { accessToken idToken refreshToken } }";
-const PROFILE_QUERY = "query UserProfileName { userProfile { firstName lastName } }";
+const PROFILE_QUERY = "query UserProfileName { userProfile { firstName lastName userId } }";
 
 const AUTH_ERROR_CODES = ["UNAUTHENTICATED", "UNAUTHORIZED", "FORBIDDEN"];
 
@@ -76,13 +79,14 @@ export class HttpAuthApi implements AuthApi {
     if (body.errors?.some((e) => AUTH_ERROR_CODES.includes(e.extensions?.code ?? ""))) {
       throw new SKaupatError("session_expired", `S-kaupat rejected the access token${errorSuffix(body)}.`);
     }
-    const profile = body.data?.userProfile as { firstName?: unknown; lastName?: unknown } | null | undefined;
+    const profile = body.data?.userProfile as { firstName?: unknown; lastName?: unknown; userId?: unknown } | null | undefined;
     if (!profile) {
       throw new SKaupatError("upstream_error", `S-kaupat returned no user profile${errorSuffix(body)}.`);
     }
     return {
       firstName: typeof profile.firstName === "string" ? profile.firstName : null,
       lastName: typeof profile.lastName === "string" ? profile.lastName : null,
+      userId: typeof profile.userId === "string" && profile.userId ? profile.userId : typeof profile.userId === "number" ? String(profile.userId) : null,
     };
   }
 
@@ -116,4 +120,12 @@ export class HttpAuthApi implements AuthApi {
 function errorSuffix(body: GraphQLBody): string {
   const codes = (body.errors ?? []).map((e) => e.extensions?.code).filter(Boolean);
   return codes.length > 0 ? ` (${codes.join(", ")})` : "";
+}
+
+/**
+ * The account ID apps see: a one-way hash of S-kaupat's own user ID. It is stable for the account on
+ * any device and across logins, but reveals nothing S-kaupat could link back without the user ID.
+ */
+export function accountIdFor(userId: string): string {
+  return "sk_" + createHash("sha256").update(`s-kaupat-mcp/account:${userId}`).digest("hex").slice(0, 32);
 }

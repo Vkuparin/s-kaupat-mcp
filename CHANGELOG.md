@@ -2,6 +2,10 @@
 
 The server follows [semantic versioning](https://semver.org/) from 1.0.0. What counts as a breaking change is in [docs/embedding.md](docs/embedding.md#versions).
 
+## 1.1.0
+
+- `login_status`, `start_login` and `get_setup_status` give `accountId` when logged in: a stable ID for the S-kaupat account, the same on any device and across logins, so apps can keep their own data per account and notice an account switch. It is a one-way hash of S-kaupat's user ID, which is never returned.
+
 ## 1.0.0
 
 The first stable release: tool names, inputs, result fields and error codes stay compatible across 1.x (see [docs/embedding.md](docs/embedding.md#versions)). Same code as 1.0.0-rc.1, after it was checked on a real Windows PC: the extension, the live site (search, stores, lists, delivery choice, order review, order history) and the standalone exe. The known limits below still apply.

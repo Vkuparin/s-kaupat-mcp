@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { SKaupatError } from "../errors.js";
 import { log } from "../log.js";
-import type { AuthApi } from "./auth-api.js";
+import { accountIdFor, type AuthApi } from "./auth-api.js";
 import { withFileLock } from "./file-lock.js";
 import type { LoginWindow } from "./login-window.js";
 import type { TokenStore } from "./token-store.js";
@@ -45,6 +45,7 @@ interface AccessToken {
 export class LiveAuth implements SKaupatAuth {
   private access: AccessToken | null = null;
   private displayName: string | null = null;
+  private accountId: string | null = null;
   /** The stored refresh token S-kaupat last rejected; avoids retrying it on every status check. */
   private rejected: string | null = null;
   private renewing: Promise<string> | null = null;
@@ -88,24 +89,25 @@ export class LiveAuth implements SKaupatAuth {
     if ((await this.readGeneration()) !== (this.generation ?? "")) {
       this.access = null;
       this.displayName = null;
+      this.accountId = null;
     }
   }
 
   async status(): Promise<LoginStatus> {
     await this.loggingOut?.catch(() => {});
     const stored = await this.options.store.read();
-    if (!stored) return { status: "logged_out", displayName: null };
-    if (stored === this.rejected) return { status: "expired", displayName: null };
+    if (!stored) return { status: "logged_out", displayName: null, accountId: null };
+    if (stored === this.rejected) return { status: "expired", displayName: null, accountId: null };
     try {
       const displayName = await this.loadDisplayName();
-      return { status: "logged_in", displayName };
+      return { status: "logged_in", displayName, accountId: this.accountId };
     } catch (err) {
-      if (err instanceof SKaupatError && err.code === "session_expired") return { status: "expired", displayName: null };
-      if (err instanceof SKaupatError && err.code === "login_required") return { status: "logged_out", displayName: null };
+      if (err instanceof SKaupatError && err.code === "session_expired") return { status: "expired", displayName: null, accountId: null };
+      if (err instanceof SKaupatError && err.code === "login_required") return { status: "logged_out", displayName: null, accountId: null };
       // A saved login that S-kaupat has not rejected is still a login; a temporary problem (S-kaupat
       // busy, browser not available) must not make the app show the user as logged out.
       log.warn("Could not confirm the saved login", { code: err instanceof SKaupatError ? err.code : "unknown" });
-      return { status: "logged_in", displayName: this.displayName };
+      return { status: "logged_in", displayName: this.displayName, accountId: this.accountId };
     }
   }
 
@@ -144,6 +146,7 @@ export class LiveAuth implements SKaupatAuth {
     this.close();
     this.access = null;
     this.displayName = null;
+    this.accountId = null;
     this.rejected = null;
     // The profile still holds the site's tokens and sign-in cookies; without clearing them the next
     // login window would pick the same account up again without asking.
@@ -160,7 +163,7 @@ export class LiveAuth implements SKaupatAuth {
   private async runLogin(timeoutMs: number): Promise<LoginResult> {
     const current = await this.status().catch(() => null);
     if (current?.status === "logged_in") {
-      return { status: "logged_in", displayName: current.displayName, alreadyLoggedIn: true };
+      return { status: "logged_in", displayName: current.displayName, accountId: current.accountId, alreadyLoggedIn: true };
     }
 
     // The login window's profile keeps the site's storage between runs, so it may still hold the
@@ -169,13 +172,14 @@ export class LiveAuth implements SKaupatAuth {
     const result = await this.options.window.open(timeoutMs, [...this.forgotten, ...(stale ? [stale] : [])]);
     if (result.status !== "logged_in") {
       log.info("Login window closed without a login", { outcome: result.status });
-      return { status: result.status, displayName: null, alreadyLoggedIn: false };
+      return { status: result.status, displayName: null, accountId: null, alreadyLoggedIn: false };
     }
 
     await withFileLock(this.options.lockPath, () => this.options.store.write(result.login.refreshToken));
     await this.newGeneration();
     this.rejected = null;
     this.displayName = null;
+    this.accountId = null;
     this.access = result.login.accessToken ? this.toAccess(result.login.accessToken) : null;
     log.info("Login saved", { store: this.options.store.description });
 
@@ -190,7 +194,7 @@ export class LiveAuth implements SKaupatAuth {
         code: err instanceof SKaupatError ? err.code : "unknown",
       });
     }
-    return { status: "logged_in", displayName, alreadyLoggedIn: false };
+    return { status: "logged_in", displayName, accountId: this.accountId, alreadyLoggedIn: false };
   }
 
   /** Fetches the account's name, renewing the access token once if S-kaupat rejects it. */
@@ -199,6 +203,7 @@ export class LiveAuth implements SKaupatAuth {
     if (this.displayName && this.access && this.access.expiresAt > this.now()) return this.displayName;
     const profile = await this.withAccessToken((token) => this.options.api.userProfile(token));
     this.displayName = profile.firstName?.trim() || [profile.firstName, profile.lastName].filter(Boolean).join(" ") || null;
+    this.accountId = profile.userId ? accountIdFor(profile.userId) : null;
     return this.displayName;
   }
 
@@ -249,6 +254,7 @@ export class LiveAuth implements SKaupatAuth {
         this.rejected = stored;
         this.access = null;
         this.displayName = null;
+        this.accountId = null;
       }
       throw err;
     }

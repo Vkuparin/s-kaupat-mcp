@@ -24,7 +24,7 @@ All of these are built by the Release workflow in GitHub Actions.
 | `get_product_details` | `productId`, `storeId` (optional) | The product page: everything above plus description, ingredients, allergens (`contains`, `may_contain`, `free_from`), nutrition per 100 g/ml, country of origin, supplier, net weight |
 | `list_categories` | `storeId` (optional), `parent` (slug, optional), `depth` (1 to 3) | Category menu in Finnish: `id`, `name`, `slug`, `childCount`, optionally `children` |
 | `browse_category` | `slug`, `storeId` (optional), `limit`, `offset`, `sort` | Products in that category, same fields as `search_products` |
-| `login_status` | none | `logged_in` (with the account holder's first name), `logged_out` or `expired`. Never opens a window |
+| `login_status` | none | `logged_in` (with the account holder's first name and a stable `accountId`), `logged_out` or `expired`. Never opens a window |
 | `start_login` | `timeoutSeconds` (30 to 900, default 300) | Opens the server's own small login window and waits: `logged_in`, `cancelled` or `timed_out`, each with a Finnish and English message |
 | `log_out` | none | Forgets the login on this device (also in the server's own browser), for a "Log out" or "Switch account" button |
 | `get_shopping_lists` | `storeId` (optional) | The user's lists with items, current prices and an estimated total. Needs login |

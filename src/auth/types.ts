@@ -11,6 +11,12 @@ export interface LoginStatus {
   status: LoginState;
   /** The account holder's first name (or full name) when logged in. */
   displayName: string | null;
+  /**
+   * A stable ID for the S-kaupat account when logged in: the same account always gets the same ID,
+   * on any device and across logins, and a different account a different one. Derived one-way from
+   * S-kaupat's own user ID, which is never returned. null when logged out or not yet known.
+   */
+  accountId: string | null;
 }
 
 export type LoginOutcome = "logged_in" | "cancelled" | "timed_out";
@@ -18,6 +24,8 @@ export type LoginOutcome = "logged_in" | "cancelled" | "timed_out";
 export interface LoginResult {
   status: LoginOutcome;
   displayName: string | null;
+  /** As in LoginStatus. */
+  accountId: string | null;
   /** True when the user was already logged in and no window was opened. */
   alreadyLoggedIn: boolean;
 }

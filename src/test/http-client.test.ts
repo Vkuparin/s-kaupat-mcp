@@ -254,3 +254,14 @@ test("browse_category sends the slug and maps the captured category sample", asy
   assert.equal(res.products[0]?.name, "Kotimaista rasvaton maito 1l");
   assert.equal(res.products[0]?.category, "Maidot");
 });
+
+test("a list deleted on the site reads as list_not_found, not a server error", async () => {
+  // Live 2026-10-08: reading a deleted list answered { errors: [{ message: "Not Found" }], data: null }.
+  const client = new HttpSKaupatClient({ fetchImpl: fakeFetch({ errors: [{ message: "Not Found" }], data: null }) });
+  assert.equal(await client.getList("token", "gone", "1"), null);
+  await assert.rejects(
+    client.addItem("token", "gone", { ean: "1", sokId: "2", name: "x", quantity: 1, isReplaceable: true }, "1"),
+    (e: SKaupatError) => e.code === "list_not_found",
+  );
+  await assert.rejects(client.deleteList("token", "gone"), (e: SKaupatError) => e.code === "list_not_found");
+});

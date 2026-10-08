@@ -5,7 +5,7 @@ Everything below needs a Windows PC with Edge, a real S-kaupat account and the n
 Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 
 ## 1. Extension install
-- [x] Install `s-kaupat-0.5.0.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
+- [x] Install `s-kaupat-0.5.1.mcpb`: Claude Desktop → Settings → Extensions, drag the file in (or Advanced settings → Install Extension…). Claude Desktop shows the install dialog with the Demo mode switch. (2026-10-08: double-clicking the file showed nothing on Ville's PC; installing from Settings worked.)
 - [ ] With Demo mode on, "find milk" works with no browser window and no login.
 - [ ] Turn Demo mode off and restart Claude Desktop.
 
@@ -37,7 +37,7 @@ Start from a fresh build: `npm ci && npm run build && npm run pack:extension`.
 ## 7. Shopping list round trip
 - [x] Create a list with products: every result says `added` (2026-10-08, 2 products).
 - [x] Add the same product again with a new quantity: `updated`, one row with the new quantity (2026-10-08, list Testi). Still to check: the site shows the same.
-- [ ] Remove one product; delete the list.
+- [ ] Remove one product; delete the list. (2026-10-08: Ville deleted the test list on the site; reading it then answered `upstream_error` instead of `list_not_found`, fixed in 0.5.1.)
 - [ ] On s-kaupat.fi, "Lisää kaikki ostoskoriin" puts a list's products in the cart. (2026-10-08: the list showed correctly on the site; the button first asked for a store/delivery location. 0.4.2 says so in `nextStep`. Recheck that the products land in the cart after picking it.)
 
 ## 8. Two apps at once

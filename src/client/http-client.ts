@@ -142,7 +142,7 @@ const SLOT_FIELDS = "slotId areaId isClosed availability startDateTime endDateTi
  * into the query text as literals, already validated, so no S-kaupat type names are needed.
  */
 function addressSearchQuery(text: string): string {
-  return `query AddressSearch { addressAutosuggest(countryCode: "FI", query: ${JSON.stringify(text)}, searchContext: DELIVERY_METHOD_SELECTION) {
+  return `query AddressSearch { addressAutosuggest(countryCode: "FIN", query: ${JSON.stringify(text)}, searchContext: DELIVERY_METHOD_SELECTION) {
     id title streetAddress postalCode city latitude longitude resultType } }`;
 }
 

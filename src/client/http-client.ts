@@ -1232,7 +1232,8 @@ function coordinateSlots(list: CoordinateSlot[] | null | undefined, areaId: stri
       );
       return slot ? [slot] : [];
     })
-    .sort((a, b) => a.start.localeCompare(b.start));
+    // Same start: the cheaper first (home delivery mixes 2- and 4-hour windows from the same hour).
+    .sort((a, b) => a.start.localeCompare(b.start) || (a.price ?? Infinity) - (b.price ?? Infinity));
 }
 
 function availableStatus(raw: string | null | undefined): boolean | null {

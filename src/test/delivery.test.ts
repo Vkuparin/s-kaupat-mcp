@@ -520,3 +520,23 @@ test("the HTTP client maps address search, delivery methods, nearby pickup and h
   );
   assert.equal(homes[0]!.area.nextSlot!.slotId, "2099-10-09:h1");
 });
+
+test("a home delivery instruction names the store, not the internal area name", async () => {
+  const { deliveryInstruction } = await import("../delivery/format.js");
+  const text = deliveryInstruction({
+    area: {
+      areaId: "a",
+      name: "Kotiinkuljetus Pääalue alk. 24.11.25",
+      method: "home_delivery",
+      storeId: "726452067",
+      storeName: "Prisma ruoan verkkokauppa",
+      price: 9.9,
+      description: null,
+      address: null,
+      alcoholAllowed: false,
+    },
+    slot: { slotId: "s", areaId: "a", date: "2026-10-09", start: "2026-10-09T04:00:00.000Z", end: "2026-10-09T08:00:00.000Z", price: 10.9, status: "available", closesAt: null, express: false },
+    selectedAt: "2026-10-08T07:00:00.000Z",
+  });
+  assert.equal(text.fi, 'Valitse sivulla "Valitse toimitustapa": Kotiinkuljetus, Prisma ruoan verkkokauppa, pe 9.10. klo 07:00–11:00.');
+});

@@ -87,7 +87,9 @@ export function deliveryInstruction(d: SavedDelivery): { fi: string; en: string 
   // The place's own name ("Prisma Herttoniemi noutolokero") says more than the store's, unless it is
   // just the method and the store ("Nouto Prisma Herttoniemi").
   const name = d.area.name?.trim();
-  const where = name && !/^nouto\b/i.test(name) ? name : (d.area.storeName ?? name ?? "");
+  // Home delivery areas have internal names ("Kotiinkuljetus Pääalue alk. 24.11.25", seen live): use the store's.
+  const where =
+    d.area.method !== "home_delivery" && name && !/^nouto\b/i.test(name) ? name : (d.area.storeName ?? name ?? "");
   const window = d.slot.end ? `${localTime(d.slot.start)}–${localTime(d.slot.end)}` : localTime(d.slot.start);
   return {
     fi: `Valitse sivulla "Valitse toimitustapa": ${FI_METHOD[d.area.method]}, ${where}, ${localDay(d.slot.start, "fi-FI")} klo ${window}.`,

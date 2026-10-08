@@ -27,6 +27,8 @@ Install the newest `s-kaupat-<version>.mcpb`: Claude Desktop → Settings → Ex
 - [ ] Pay on delivery (if your store offers it): the order shows on the site under your orders; cancel it from Claude.
 - [ ] Card: the payment page opens in the extension's own window. Cancel there: `get_order` says awaiting payment; then cancel the order from Claude. (A real card payment is your call.)
 
+- [ ] Ask Claude for your orders: `get_orders` lists the same orders as the site's order page (the cancelled test order 1440991558 under past).
+
 ## 5. Shopping list on the site
 - [ ] A list made by Claude shows the same rows on the site; removing a product and deleting the list from Claude show on the site too.
 

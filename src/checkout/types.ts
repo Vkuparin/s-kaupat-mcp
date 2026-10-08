@@ -153,6 +153,16 @@ export interface OrderInfo {
   trackingUrl: string | null;
 }
 
+/** One order in the account's history (the site's "Tilaukset"), placed here or on the site. */
+export interface OrderHistoryEntry extends Omit<OrderInfo, "summary"> {
+  createdAt: string | null;
+  storeName: string | null;
+  /** pickup, home_delivery or express; null when S-kaupat reported something else. */
+  deliveryMethod: "pickup" | "home_delivery" | "express" | null;
+  /** The total S-kaupat shows for it, in euros. */
+  total: number | null;
+}
+
 /** A just-created order. accessToken authorises later calls on it: keep it, never show or log it. */
 export interface CreatedOrder extends OrderInfo {
   accessToken: string | null;
@@ -190,4 +200,6 @@ export interface CheckoutApi {
   authorizePayment(accessToken: string, orderId: string): Promise<boolean>;
   getOrder(accessToken: string, orderId: string, orderToken: string | null): Promise<OrderInfo | null>;
   cancelOrder(accessToken: string, orderId: string, orderToken: string | null): Promise<OrderInfo["state"]>;
+  /** The account's S-kaupat orders, newest first as S-kaupat lists them. */
+  getOrderHistory(accessToken: string, limit: number): Promise<OrderHistoryEntry[]>;
 }

@@ -167,7 +167,7 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
  * - install_browser: the PC needs Microsoft Edge or Google Chrome.
  * - review_order: show the order summary again (review_order) and let the user confirm it.
  * - pay: show the payment step again (pay_order), or another payment method.
- * - check_orders: show the user's orders (get_order) before doing anything else.
+ * - check_orders: show the user's orders (get_orders) before doing anything else.
  * - none: nothing the user can do now (a bug in the request, or a missing feature).
  */
 export type ErrorAction =

@@ -7,6 +7,7 @@ import type {
   CustomerProfile,
   MandatoryProduct,
   NewOrder,
+  OrderHistoryEntry,
   OrderInfo,
   OrderItemInput,
   OrderState,
@@ -72,6 +73,10 @@ const CREATE_PAYMENT_MUTATION = `mutation CreatePayment($orderId: ID!, $cardId: 
 const AUTHORIZE_MUTATION = "mutation AuthorizePayment($orderId: ID!) { authorizePayment(orderId: $orderId) { orderId authorized } }";
 const ORDER_QUERY = `query GetOrderById($id: ID!) { order(id: $id) { ${ORDER_FIELDS} isCancelable isModifiable trackingUrl
   paymentLink { url } summary { ${SUMMARY_FIELDS} } } }`;
+const HISTORY_QUERY = `query GetOrderHistory($domain: Domain, $dataSources: [UserOrderDataSource!], $limit: Int) {
+  userOrders(domain: $domain, dataSources: $dataSources, limit: $limit) { id createdAt storeName storeId deliveryDate
+    deliveryMethod deliveryTime totalCost orderStatus orderNumber isModifiable isCancelable isFastTrack trackingUrl
+    paymentMethod paymentStatus paymentLink { url } } }`;
 const CANCEL_MUTATION = "mutation CancelOrder($id: ID!) { cancelOrder(id: $id) { id orderStatus } }";
 
 const API_PAYMENT: Record<PaymentMethod, string> = { card: "CARD_PAYMENT", invoice: "INVOICE", on_delivery: "ON_DELIVERY" };
@@ -272,6 +277,13 @@ export class HttpCheckoutApi implements CheckoutApi {
     return orderState(str(obj(body.data?.cancelOrder).orderStatus));
   }
 
+  async getOrderHistory(accessToken: string, limit: number): Promise<OrderHistoryEntry[]> {
+    // The site's own variables: S-kaupat orders only (not Foodie).
+    const data = await this.data("GetOrderHistory", HISTORY_QUERY, { domain: "S_KAUPAT", dataSources: ["S_KAUPAT"], limit }, { accessToken });
+    const list = Array.isArray(data.userOrders) ? data.userOrders : [];
+    return list.map((raw) => mapHistoryEntry(obj(raw)));
+  }
+
   private async data(
     operationName: string,
     query: string,
@@ -376,6 +388,19 @@ function reservation(raw: unknown): Reservation {
   const o = obj(raw);
   if (!o.reservationId) throw new SKaupatError("upstream_error", "S-kaupat returned no reservation.");
   return { reservationId: String(o.reservationId), expiresAt: str(o.expiresAt) };
+}
+
+export function mapHistoryEntry(o: Record<string, unknown>): OrderHistoryEntry {
+  const { summary: _summary, ...info } = mapOrder(o);
+  const method = str(o.deliveryMethod)?.toUpperCase() ?? "";
+  const total = typeof o.totalCost === "number" ? o.totalCost : num(o.totalCost);
+  return {
+    ...info,
+    createdAt: str(o.createdAt),
+    storeName: str(o.storeName)?.trim() || null,
+    deliveryMethod: o.isFastTrack === true ? "express" : method === "PICKUP" ? "pickup" : method === "HOME_DELIVERY" ? "home_delivery" : null,
+    total: total === null ? null : Math.round(total * 100) / 100,
+  };
 }
 
 export function mapOrder(o: Record<string, unknown>): OrderInfo {

@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **early (v0.10.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.11.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -45,6 +45,7 @@ All of these are built by the Release workflow in GitHub Actions.
 | `pay_order` | `orderId`, `cardId`, `saveCard`, `paymentPage` | Starts (or retries) the card payment of an order |
 | `confirm_payment` | `orderId` | After the app's own web view returned from the payment page: S-kaupat authorises the payment |
 | `get_order` | `orderId` (optional) | The order's state, payment state, summary and `isCancelable`; without an id the orders placed through this app |
+| `get_orders` | `limit` | The account's orders, placed here or on the site, as `needsPayment`, `active` and `past`, each with store, method, day, time, total and `placedHere` |
 | `cancel_order` | `orderId` | Cancels the order while S-kaupat allows it |
 | `get_site_choice` | `includeStorageShape` | The store and pickup choice the site itself has in that window, and whether it matches `select_delivery` |
 

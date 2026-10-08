@@ -586,6 +586,33 @@ export function registerCheckoutTools(server: McpServer, ctx: CheckoutContext): 
   );
 
   server.registerTool(
+    "get_orders",
+    {
+      title: "List the user's orders",
+      description:
+        "The account's S-kaupat orders, as on the site's order page, whether placed in this app or on the site, " +
+        "grouped like the site does: needsPayment (the card payment failed or a payment link is waiting: offer " +
+        "pay_order, or paymentLinkUrl), active (coming up) and past (done or cancelled). Each has orderNumber, " +
+        "storeName, deliveryMethod, deliveryDate and deliveryTime, total in euros, state, payment, isCancelable and " +
+        "placedHere (cancel_order and pay_order work for orders placed here). Read-only. Needs a login.",
+      inputSchema: { limit: z.number().int().min(1).max(50).default(20).describe("How many of the newest orders to read.") },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ limit }) =>
+      ctx.run("get_orders", async () => {
+        const orders = await ctx.withToken((t) => ctx.checkout.getOrderHistory(t, limit));
+        const entries = orders.map((o) => ({ ...o, placedHere: ctx.orders.get(o.orderId) !== null }));
+        const past = (o: (typeof entries)[number]) => o.state === "done" || o.state === "cancelled";
+        const unpaid = (o: (typeof entries)[number]) => o.payment === "payment_failed" || o.payment === "payment_link";
+        return {
+          needsPayment: entries.filter((o) => !past(o) && unpaid(o)),
+          active: entries.filter((o) => !past(o) && !unpaid(o)),
+          past: entries.filter(past),
+        };
+      }),
+  );
+
+  server.registerTool(
     "cancel_order",
     {
       title: "Cancel an order",

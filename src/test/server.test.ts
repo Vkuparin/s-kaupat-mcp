@@ -59,6 +59,7 @@ test("lists the catalogue, store, login, shopping list, delivery and checkout to
     "get_delivery_options",
     "get_delivery_slots",
     "get_order",
+    "get_orders",
     "get_product_details",
     "get_products",
     "get_selected_store",

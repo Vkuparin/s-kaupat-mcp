@@ -194,6 +194,55 @@ test("Pikatoimitus is ordered in the app: home address needed, no time reserved,
   assert.deepEqual(checkout.calls, ["order:on_delivery"], "an express time is not reserved first");
 });
 
+test("order history: active and past orders, placed here or not", async () => {
+  const { mcp } = await connect();
+  await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-1", slotId: SLOT });
+  const draft = { items: ITEMS, payment: { method: "on_delivery" } };
+  const ids: string[] = [];
+  for (let i = 0; i < 2; i++) {
+    const review = await call(mcp, "review_order", draft);
+    const placed = await call(mcp, "place_order", { ...draft, confirmationCode: review.data.confirmationCode });
+    ids.push(placed.data.order.orderId);
+  }
+  await call(mcp, "cancel_order", { orderId: ids[0] });
+  const res = await call(mcp, "get_orders", { limit: 10 });
+  assert.equal(res.isError, false);
+  assert.deepEqual(res.data.active.map((o: any) => o.orderId), [ids[1]]);
+  assert.deepEqual(res.data.past.map((o: any) => [o.orderId, o.state]), [[ids[0], "cancelled"]]);
+  assert.deepEqual(res.data.needsPayment, []);
+  assert.equal(res.data.active[0].placedHere, true);
+  assert.equal("accessToken" in res.data.active[0], false);
+});
+
+test("HTTP adapter: order history uses the site's variables and maps each order", async () => {
+  const sent: { op: string; vars: Record<string, unknown> }[] = [];
+  const api = new HttpCheckoutApi({
+    graphql: async (op, _q, vars) => {
+      sent.push({ op, vars });
+      return {
+        data: {
+          userOrders: [
+            { id: "o1", orderNumber: 1440991558, createdAt: "2026-10-08T14:05:00Z", storeName: " Prisma Herttoniemi ", storeId: "726308750",
+              deliveryMethod: "PICKUP", isFastTrack: false, deliveryDate: "2026-10-09", deliveryTime: "16:00-18:00", totalCost: 8.98,
+              orderStatus: "CANCELLED", paymentMethod: "CARD_PAYMENT", paymentStatus: "UNAVAILABLE", isCancelable: false, paymentLink: null },
+            { id: "o2", deliveryMethod: "HOME_DELIVERY", isFastTrack: true, totalCost: "12,5", orderStatus: "NEW", paymentMethod: "ON_DELIVERY" },
+          ],
+        },
+      };
+    },
+  });
+  const orders = await api.getOrderHistory("token", 5);
+  assert.deepEqual(sent, [{ op: "GetOrderHistory", vars: { domain: "S_KAUPAT", dataSources: ["S_KAUPAT"], limit: 5 } }]);
+  assert.equal(orders[0]!.orderNumber, "1440991558");
+  assert.equal(orders[0]!.storeName, "Prisma Herttoniemi");
+  assert.equal(orders[0]!.deliveryMethod, "pickup");
+  assert.equal(orders[0]!.state, "cancelled");
+  assert.equal(orders[0]!.total, 8.98);
+  assert.equal(orders[1]!.deliveryMethod, "express");
+  assert.equal(orders[1]!.total, 12.5);
+  assert.equal(orders[1]!.payment, "not_needed");
+});
+
 test("place_order can be turned off", async () => {
   const { mcp } = await connect({ ordering: false });
   const res = await call(mcp, "place_order", { items: ITEMS, payment: { method: "card" }, confirmationCode: "x" });

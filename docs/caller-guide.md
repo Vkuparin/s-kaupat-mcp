@@ -131,7 +131,7 @@ The whole order can happen in the app's own screens. The only step outside it is
    - `paymentPage: "app"` only returns the URL, for the app's own web view. When the web view reaches `payment.returnUrlPrefix` (`https://www.s-kaupat.fi/payment/auth/<orderId>?responseCode=OK&...`), close it and call `confirm_payment`. `responseCode=Cancel` means the user cancelled.
    - `paymentPage: "later"` creates the order without starting a payment; `pay_order` starts it.
    Then call `get_order` (for example every few seconds while the payment screen is up, and when the app comes back to front): `payment` turns `paid` when done. On `payment_failed` offer `pay_order` again (another card) or `cancel_order`. An unpaid card order is not picked: S-kaupat cancels it if it stays unpaid.
-5. **After.** `get_order` with no `orderId` lists the orders placed through the app; with an `orderId` it gives the state (`received`, `being_picked`, `done`, `cancelled`), payment, S-kaupat's summary and `isCancelable`. `cancel_order` cancels while S-kaupat allows it; ask the user to confirm first.
+5. **After.** `get_order` with no `orderId` lists the orders placed through the app; with an `orderId` it gives the state (`received`, `being_picked`, `done`, `cancelled`), payment, S-kaupat's summary and `isCancelable`. `cancel_order` cancels while S-kaupat allows it; ask the user to confirm first. For an "Orders" screen use `get_orders`: all the account's S-kaupat orders, also those made on the site, in three groups like the site's order page: `needsPayment` (show first, with `pay_order` for orders with `placedHere: true`, otherwise `paymentLinkUrl`), `active` and `past`.
 
 Rules that keep the user safe:
 - Never call `place_order` without the user pressing an order button after seeing the summary.
@@ -173,7 +173,7 @@ Show `userMessage`, then offer what `action` says:
 | `install_browser` | "S-kaupat needs Microsoft Edge or Google Chrome on this computer" |
 | `review_order` | Show the order summary again (`review_order`) and let the user confirm or fill in what is missing |
 | `pay` | The payment step again (`pay_order`), or another payment method |
-| `check_orders` | Show the user's orders (`get_order`) before doing anything else |
+| `check_orders` | Show the user's orders (`get_orders`) before doing anything else |
 | `none` | Nothing the user can fix; log `message` for the developer |
 
 `retryable` is `true` when trying again later can help without the user doing anything.

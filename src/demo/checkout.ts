@@ -7,6 +7,7 @@ import type {
   CustomerProfile,
   MandatoryProduct,
   NewOrder,
+  OrderHistoryEntry,
   OrderInfo,
   OrderItemInput,
   OrderSummary,
@@ -22,7 +23,7 @@ import type {
  * Nothing leaves the process. The "payment page" is a placeholder URL; confirm_payment marks it paid.
  */
 export class DemoCheckout implements CheckoutApi {
-  private readonly orders = new Map<string, { order: NewOrder; status: string; paymentStatus: string | null; number: string; token: string }>();
+  private readonly orders = new Map<string, { order: NewOrder; status: string; paymentStatus: string | null; number: string; token: string; createdAt: string }>();
   private readonly reservations = new Set<string>();
   private nextNumber = 100_001;
   /** Recorded calls, for tests. */
@@ -110,6 +111,7 @@ export class DemoCheckout implements CheckoutApi {
       paymentStatus: order.payment === "card" ? "PENDING" : null,
       number: String(this.nextNumber++),
       token: `demo-token-${randomUUID()}`,
+      createdAt: new Date().toISOString(),
     };
     this.orders.set(id, entry);
     return { ...this.info(id)!, accessToken: entry.token };
@@ -139,6 +141,17 @@ export class DemoCheckout implements CheckoutApi {
     this.calls.push("cancel");
     entry.status = "CANCELLED";
     return "cancelled";
+  }
+
+  async getOrderHistory(_token: string, limit: number): Promise<OrderHistoryEntry[]> {
+    return [...this.orders.keys()]
+      .reverse()
+      .slice(0, limit)
+      .map((id) => {
+        const { summary: _summary, ...info } = this.info(id)!;
+        const entry = this.orders.get(id)!;
+        return { ...info, createdAt: entry.createdAt, storeName: null, deliveryMethod: null, total: null };
+      });
   }
 
   private info(orderId: string): OrderInfo | null {

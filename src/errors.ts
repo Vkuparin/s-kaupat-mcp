@@ -15,6 +15,8 @@ export type ErrorCode =
   | "store_not_found"
   | "product_unavailable"
   | "list_not_found"
+  | "delivery_area_not_found"
+  | "slot_unavailable"
   | "blocked"
   | "invalid_quantity"
   | "context_changed"
@@ -69,6 +71,14 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
     fi: "Ostoslistaa ei löytynyt. Se on ehkä poistettu.",
     en: "That shopping list could not be found. It may have been deleted.",
   },
+  delivery_area_not_found: {
+    fi: "Toimitustapaa ei löytynyt. Valitse toimitustapa uudelleen.",
+    en: "That delivery option could not be found. Please choose how to get your order again.",
+  },
+  slot_unavailable: {
+    fi: "Valittu aika ei ole enää vapaana. Valitse toinen aika.",
+    en: "That time is no longer available. Please choose another time.",
+  },
   blocked: {
     fi: "S-kaupat esti pyynnön. Yritä hetken päästä uudelleen.",
     en: "S-kaupat refused the request. Please try again in a moment.",
@@ -106,6 +116,8 @@ export const USER_MESSAGES: Record<ErrorCode, UserMessage> = {
  * - retry: try again shortly; nothing for the user to fix.
  * - check_list: show the list again (get_shopping_list) so the user sees what is on it.
  * - refresh_lists: the list is gone; show the lists again (get_shopping_lists).
+ * - choose_delivery: show the delivery and pickup options again (get_delivery_options).
+ * - choose_delivery_time: show the times again (get_delivery_slots) so the user picks another.
  * - choose_other_product: offer another product.
  * - install_browser: the PC needs Microsoft Edge or Google Chrome.
  * - none: nothing the user can do now (a bug in the request, or a missing feature).
@@ -114,6 +126,8 @@ export type ErrorAction =
   | "log_in"
   | "finish_login"
   | "choose_store"
+  | "choose_delivery"
+  | "choose_delivery_time"
   | "retry"
   | "check_list"
   | "refresh_lists"
@@ -133,6 +147,8 @@ export const ERROR_ACTIONS: Record<ErrorCode, { action: ErrorAction; retryable: 
   store_not_found: { action: "choose_store", retryable: false },
   product_unavailable: { action: "choose_other_product", retryable: false },
   list_not_found: { action: "refresh_lists", retryable: false },
+  delivery_area_not_found: { action: "choose_delivery", retryable: false },
+  slot_unavailable: { action: "choose_delivery_time", retryable: false },
   blocked: { action: "retry", retryable: true },
   invalid_quantity: { action: "none", retryable: false },
   context_changed: { action: "retry", retryable: true },

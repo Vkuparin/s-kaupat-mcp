@@ -12,6 +12,7 @@ import { FixtureSKaupatClient } from "./client/fixture-client.js";
 import { HttpSKaupatClient } from "./client/http-client.js";
 import type { SKaupatClient } from "./client/types.js";
 import type { SKaupatConfig } from "./config.js";
+import type { DeliveryApi } from "./delivery/types.js";
 import type { ShoppingListApi } from "./lists/types.js";
 import { log, setDebugLogging } from "./log.js";
 import { FileStoreSelection, type StoreSelection } from "./selection.js";
@@ -36,7 +37,7 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   const { client, auth, browser } = config.mode === "demo" ? demoParts(config) : liveParts(config);
   return {
     config,
-    createMcpServer: () => createServer(client, auth, { selection, lists: client, mode: config.mode }),
+    createMcpServer: () => createServer(client, auth, { selection, lists: client, delivery: client, mode: config.mode }),
     close: async () => {
       await browser?.close();
     },
@@ -44,7 +45,7 @@ export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
 }
 
 interface Parts {
-  client: SKaupatClient & ShoppingListApi;
+  client: SKaupatClient & ShoppingListApi & DeliveryApi;
   auth: SKaupatAuth;
   browser: BrowserSession | null;
 }

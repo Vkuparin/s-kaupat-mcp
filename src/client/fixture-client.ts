@@ -3,6 +3,8 @@ import { listNotFound, storeNotFound } from "../errors.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi } from "../lists/types.js";
 import { finnishDate } from "../stores.js";
 import { DEMO_CATALOGUE } from "../demo/catalogue.js";
+import { demoCalendar, demoPickupAreas } from "../demo/delivery.js";
+import type { DeliveryApi, DeliveryArea, DeliveryCalendar } from "../delivery/types.js";
 import type {
   BasketCheck,
   BrowseCategoryInput,
@@ -49,14 +51,18 @@ type ProductDetailFields = Omit<ProductDetails, keyof Product>;
  * Offline client backed by a JSON catalogue. Used for tests and for trying the
  * server in an MCP client without touching S-kaupat (SKAUPAT_MODE=fixtures).
  */
-export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi {
+export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi, DeliveryApi {
   private readonly catalogue: Catalogue;
   /** In-memory shopping lists, so apps can try the list flow offline. */
   private readonly lists = new Map<string, { id: string; name: string; createdAt: string; items: StoredItem[] }>();
   private nextId = 1;
 
   /** A catalogue object, or the path of a JSON file with one. Defaults to the built-in demo catalogue. */
-  constructor(catalogue: Catalogue | string = DEMO_CATALOGUE) {
+  constructor(
+    catalogue: Catalogue | string = DEMO_CATALOGUE,
+    /** Clock for the demo delivery times, for tests. */
+    private readonly now: () => Date = () => new Date(),
+  ) {
     this.catalogue =
       typeof catalogue === "string"
         ? (JSON.parse(readFileSync(catalogue, "utf8")) as Catalogue)
@@ -235,6 +241,20 @@ export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi {
         };
       }),
     };
+  }
+
+  async getPickupAreas(storeId: string): Promise<DeliveryArea[]> {
+    this.requireStore(storeId);
+    const index = this.catalogue.stores.findIndex((s) => s.id === storeId);
+    return demoPickupAreas(this.catalogue.stores[index]!, index, this.now());
+  }
+
+  async getDeliveryCalendar(areaId: string, startDate: string, endDate: string): Promise<DeliveryCalendar | null> {
+    for (const [index, store] of this.catalogue.stores.entries()) {
+      const calendar = demoCalendar(store, index, areaId, startDate, endDate, this.now());
+      if (calendar) return calendar;
+    }
+    return null;
   }
 
   private requireStore(storeId: string): void {

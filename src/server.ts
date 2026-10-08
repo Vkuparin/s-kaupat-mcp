@@ -9,9 +9,11 @@ import type { SKaupatAuth } from "./auth/types.js";
 import { PRODUCT_SORTS, STORE_CHAINS, type Category, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
 import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./selection.js";
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
+import { deliveryInstruction, isExpired } from "./delivery/format.js";
+import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.5.1";
+export const SERVER_VERSION = "0.6.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -31,6 +33,8 @@ export interface ServerOptions {
   now?: () => Date;
   /** Shopping-list calls (need a login). Without it the list tools answer unsupported. */
   lists?: ShoppingListApi;
+  /** Delivery and pickup times. Without it the delivery tools answer unsupported. */
+  delivery?: DeliveryApi;
   /** demo: sample data, no S-kaupat account (the extension's Demo mode). Reported by get_setup_status. */
   mode?: "live" | "demo";
 }
@@ -42,7 +46,8 @@ export const SERVER_INSTRUCTIONS = [
   "2. Search with search_products (queries in Finnish work best, e.g. 'maito', 'ruisleipä') or browse with list_categories and browse_category.",
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
-  "5. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the first time the site asks for the store and pickup or delivery), check out. These tools never place orders or pay.",
+  "5. Optionally let the user pick a pickup time: get_delivery_options, then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots.",
+  "6. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the site asks for the store and pickup or delivery; nextStep says exactly what to pick), check out. These tools never place orders, reserve times or pay.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
 
@@ -65,8 +70,8 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       title: "Check what is set up",
       description:
         "One call for an app's first screen: whether a store is chosen, whether the user is logged in, and " +
-        "nextStep: choose_store, log_in or null when everything is ready. Searching works once a store is " +
-        "chosen; shopping lists also need a login. mode is demo when the server uses sample data. Never opens " +
+        "nextStep: choose_store, log_in, choose_delivery (a chosen pickup time has passed) or null when everything is ready. Searching works once a store is " +
+        "chosen; shopping lists also need a login. delivery is the chosen pickup or delivery time, or null. mode is demo when the server uses sample data. Never opens " +
         "a login window.",
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: true },
@@ -84,13 +89,17 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         }
         // "unknown" counts as logged in: a list call will say if it is not, and the app shouldn't nag.
         const loggedIn = login.status === "logged_in" || login.status === "unknown";
+        const delivery = selection.getDelivery();
+        const deliveryExpired = delivery !== null && isExpired(delivery.slot, now());
         return {
           mode: options.mode ?? "live",
           store: store ? { id: store.id, name: store.name, chainName: store.chainName } : null,
           login: { status: login.status, displayName: login.displayName },
+          // Optional: null until the user picks a time. An expired choice asks for a new one.
+          delivery: delivery ? deliveryView(delivery, now()) : null,
           canSearch: store !== null,
           canUseLists: store !== null && loggedIn,
-          nextStep: store === null ? "choose_store" : loggedIn ? null : "log_in",
+          nextStep: store === null ? "choose_store" : !loggedIn ? "log_in" : deliveryExpired ? "choose_delivery" : null,
         };
       }),
   );
@@ -375,6 +384,11 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
     const saved = selection.get();
     return saved?.id === id ? saved.name : seenStores.get(id)?.name ?? null;
   };
+  /** The chosen time, when it is for this store and still ahead. */
+  const currentDelivery = (store: string): SavedDelivery | null => {
+    const saved = selection.getDelivery();
+    return saved && saved.area.storeId === store && !isExpired(saved.slot, now()) ? saved : null;
+  };
   const withToken: WithToken = (fn) => (auth.withAccessToken ? auth.withAccessToken(fn) : auth.getAccessToken().then(fn));
   const requireLists = (): ShoppingListApi => {
     if (!options.lists) throw new SKaupatError("unsupported", "Shopping lists are not available in this server.");
@@ -485,7 +499,7 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
             };
           },
         );
-        return listWriteView(result, storeNameFor(store));
+        return listWriteView(result, storeNameFor(store), currentDelivery(store));
       }),
   );
 
@@ -510,7 +524,11 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         const store = resolveStoreId(storeId);
         const lists = requireLists();
         const list = await getListOrThrow(listId, store);
-        return listWriteView(await addItemsToList({ client, lists, withToken, storeId: store, list, items }), storeNameFor(store));
+        return listWriteView(
+          await addItemsToList({ client, lists, withToken, storeId: store, list, items }),
+          storeNameFor(store),
+          currentDelivery(store),
+        );
       }),
   );
 
@@ -563,7 +581,226 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
       }),
   );
 
+  const requireDelivery = (): DeliveryApi => {
+    if (!options.delivery) throw new SKaupatError("unsupported", "Delivery times are not available in this server.");
+    return options.delivery;
+  };
+
+  server.registerTool(
+    "get_delivery_options",
+    {
+      title: "Get pickup and delivery options",
+      description:
+        "Ways to get an order from the user's store, for the first step of choosing a time (the site's " +
+        "'Valitse toimitustapa'). Each option has an areaId for get_delivery_slots, a method (pickup, " +
+        "home_delivery, express), a base fee, a pickup address and nextSlot, the next free time, so the app " +
+        "can show 'next free: tomorrow 10–12' at once. Pickup options are listed now; home delivery and " +
+        "express need an address and are listed in methodsNotYetSupported until that is added.",
+      inputSchema: { storeId },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ storeId }) =>
+      run("get_delivery_options", async () => {
+        const store = resolveStoreId(storeId);
+        const options = await requireDelivery().getPickupAreas(store);
+        return {
+          storeId: store,
+          storeName: storeNameFor(store),
+          selectedAreaId: selection.getDelivery()?.area.areaId ?? null,
+          options,
+          methodsNotYetSupported: ["home_delivery", "express"],
+        };
+      }),
+  );
+
+  server.registerTool(
+    "get_delivery_slots",
+    {
+      title: "Get pickup or delivery times",
+      description:
+        "The calendar for one option from get_delivery_options: one entry per day from fromDate, each with its " +
+        "times (start, end, fee in euros, status available, full, closed or unknown, and closesAt, when ordering " +
+        "for it closes). Only available times can be chosen; show the others greyed out. Times fill up, so call " +
+        "this again right before the user chooses rather than reusing an old answer.",
+      inputSchema: {
+        areaId: z.string().min(1).describe("areaId from get_delivery_options."),
+        fromDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe("First day, YYYY-MM-DD. Defaults to today in Finland."),
+        days: z.number().int().min(1).max(14).default(7).describe("How many days to return."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ areaId, fromDate, days }) =>
+      run("get_delivery_slots", async () => {
+        const start = fromDate ?? finnishDate(now());
+        const dates = dateRange(start, days);
+        const calendar = await requireDelivery().getDeliveryCalendar(areaId, start, dates[dates.length - 1]!);
+        if (!calendar) throw deliveryAreaNotFound(areaId);
+        const selectedSlotId = selection.getDelivery()?.slot.slotId ?? null;
+        return {
+          area: calendar.area,
+          selectedSlotId,
+          days: dates.map((date) => {
+            const slots = calendar.slots.filter((slot) => slot.date === date);
+            return { date, availableCount: slots.filter((slot) => slot.status === "available").length, slots };
+          }),
+          observedAt: now().toISOString(),
+        };
+      }),
+  );
+
+  server.registerTool(
+    "select_delivery",
+    {
+      title: "Choose a pickup or delivery time",
+      description:
+        "Save the time the user picked (areaId and slotId from get_delivery_slots), after checking it is still " +
+        "free. It is remembered like the store choice, check_basket checks lists against that day, and the " +
+        "finishing instructions say exactly what to pick on the site. It does not reserve the time on S-kaupat: " +
+        "the user confirms it on the site when checking out. Fails with slot_unavailable if it was taken meanwhile.",
+      inputSchema: {
+        areaId: z.string().min(1).describe("areaId from get_delivery_options."),
+        slotId: z.string().min(1).describe("slotId from get_delivery_slots."),
+      },
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    async ({ areaId, slotId }) =>
+      run("select_delivery", async () => {
+        const today = finnishDate(now());
+        const dates = dateRange(today, 14);
+        const calendar = await requireDelivery().getDeliveryCalendar(areaId, today, dates[dates.length - 1]!);
+        if (!calendar) throw deliveryAreaNotFound(areaId);
+        const slot = calendar.slots.find((s) => s.slotId === slotId);
+        if (!slot || slot.status !== "available") {
+          throw new SKaupatError("slot_unavailable", `Slot ${slotId} is ${slot?.status ?? "not offered"} in area ${areaId}.`, {
+            areaId,
+            slotId,
+          });
+        }
+        const { nextSlot: _next, ...area } = calendar.area;
+        if (area.storeId && area.storeId !== selection.get()?.id) {
+          // The chosen store follows the chosen pickup place, so prices and lists match it.
+          const details = (await client.getStores([area.storeId])).get(area.storeId);
+          if (details) selection.set({ ...(seenStores.get(area.storeId) ?? storeFromDetails(details)), selectedAt: now().toISOString() });
+        }
+        const saved: SavedDelivery = { area, slot, selectedAt: now().toISOString() };
+        selection.setDelivery(saved);
+        return { delivery: deliveryView(saved, now()) };
+      }),
+  );
+
+  server.registerTool(
+    "clear_delivery",
+    {
+      title: "Forget the chosen time",
+      description: "Forget the pickup or delivery time chosen with select_delivery. The store choice stays.",
+      inputSchema: {},
+      annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: false },
+    },
+    async () =>
+      run("clear_delivery", async () => {
+        selection.setDelivery(null);
+        return { delivery: null };
+      }),
+  );
+
+  server.registerTool(
+    "check_basket",
+    {
+      title: "Check that products can be ordered",
+      description:
+        "Ask S-kaupat whether these products can be ordered from the user's store, for the time chosen with " +
+        "select_delivery when there is one (otherwise for the store in general). Pass a listId (needs a login) " +
+        "or items. Per product: ok, unavailable (with S-kaupat's own Finnish label, e.g. out of stock), " +
+        "not_in_store, not_found or unknown. Read-only: nothing is added anywhere.",
+      inputSchema: {
+        listId: z.string().min(1).optional().describe("Check this shopping list."),
+        items: z
+          .array(z.object({ productId: z.string().min(1), quantity: z.number().positive().max(99).default(1) }))
+          .min(1)
+          .max(50)
+          .optional()
+          .describe("Or check these products."),
+        storeId,
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ listId, items, storeId }) =>
+      run("check_basket", async () => {
+        if (!listId === !items) throw new SKaupatError("invalid_argument", "Give either listId or items.");
+        const store = resolveStoreId(storeId);
+        let rows: { productId: string; name: string | null; quantity: number }[];
+        if (listId) {
+          const list = await getListOrThrow(listId, store);
+          rows = list.items.map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity }));
+        } else {
+          rows = items!.map((i) => ({ productId: i.productId, name: null, quantity: i.quantity }));
+        }
+        const delivery = currentDelivery(store);
+        const checks =
+          rows.length === 0
+            ? new Map()
+            : await client.checkBasket(
+                store,
+                rows.map((r) => ({ id: r.productId, quantity: r.quantity })),
+                delivery ? { date: delivery.slot.date, slotId: delivery.slot.slotId, areaId: delivery.area.areaId } : undefined,
+              );
+        const results = rows.map((r) => {
+          const check = checks.get(r.productId);
+          return { ...r, status: check?.status ?? "unknown", label: check?.label ?? null };
+        });
+        return {
+          storeId: store,
+          checkedFor: delivery ? deliveryView(delivery, now()) : null,
+          items: results,
+          summary: {
+            ok: results.filter((r) => r.status === "ok").length,
+            problems: results.filter((r) => r.status !== "ok").length,
+          },
+        };
+      }),
+  );
+
   return server;
+}
+
+function deliveryAreaNotFound(areaId: string): SKaupatError {
+  return new SKaupatError("delivery_area_not_found", `Delivery area ${areaId} was not found.`, { areaId });
+}
+
+/** `count` consecutive dates from `start` (YYYY-MM-DD). */
+function dateRange(start: string, count: number): string[] {
+  const dates: string[] = [];
+  const d = new Date(`${start}T12:00:00Z`);
+  for (let i = 0; i < count; i++) {
+    dates.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return dates;
+}
+
+/** The saved choice as apps show it, with what to pick on the site to match it. */
+function deliveryView(d: SavedDelivery, now: Date) {
+  const slot: DeliverySlot = d.slot;
+  return {
+    status: isExpired(slot, now) ? ("expired" as const) : ("chosen" as const),
+    method: d.area.method,
+    areaId: d.area.areaId,
+    areaName: d.area.name,
+    storeId: d.area.storeId,
+    storeName: d.area.storeName,
+    address: d.area.address,
+    slotId: slot.slotId,
+    date: slot.date,
+    start: slot.start,
+    end: slot.end,
+    price: slot.price,
+    closesAt: slot.closesAt,
+    siteInstruction: deliveryInstruction(d),
+  };
 }
 
 const LOGIN_MESSAGES = {
@@ -604,7 +841,14 @@ function categoryView(c: Category, depth: number): CategoryView {
  * store choice in the browser, so the first time it asks for a store and a delivery method before
  * the button works (seen live 2026-10-08).
  */
-function listNextStep(storeName: string | null) {
+function listNextStep(storeName: string | null, delivery: SavedDelivery | null) {
+  if (delivery) {
+    const pick = deliveryInstruction(delivery);
+    return {
+      fi: `Avaa ostoslista S-kaupat-sivulla ja paina "Lisää kaikki ostoskoriin". ${pick.fi} Tilaus vahvistetaan sivulla.`,
+      en: `Open the list on the S-kaupat site and press "Lisää kaikki ostoskoriin" (add all to cart). ${pick.en} Then check out there.`,
+    };
+  }
   const fiStore = storeName ? `kaupaksi ${storeName}` : "kauppasi";
   const enStore = storeName ? `${storeName} as the store` : "your store";
   return {
@@ -634,7 +878,7 @@ function listView(list: ShoppingList) {
   };
 }
 
-function listWriteView({ list, results }: ListWriteResult, storeName: string | null) {
+function listWriteView({ list, results }: ListWriteResult, storeName: string | null, delivery: SavedDelivery | null) {
   const count = (status: string) => results.filter((r) => r.status === status).length;
   return {
     list: listView(list),
@@ -650,7 +894,7 @@ function listWriteView({ list, results }: ListWriteResult, storeName: string | n
       uncertain: count("uncertain"),
       withWarnings: results.filter((r) => "warning" in r && r.warning).length,
     },
-    nextStep: listNextStep(storeName),
+    nextStep: listNextStep(storeName, delivery),
   };
 }
 

@@ -76,8 +76,8 @@ export class FileStoreSelection extends BaseSelection {
     super();
   }
 
+  /** Re-read on every use: other server processes may share the file. It is tiny. */
   protected read(): Settings {
-    if (this.cached) return this.cached;
     try {
       const parsed = JSON.parse(readFileSync(this.path, "utf8")) as Partial<SettingsFile>;
       this.cached = {
@@ -96,7 +96,7 @@ export class FileStoreSelection extends BaseSelection {
   protected write(settings: Settings): void {
     const file: SettingsFile = { version: 1, ...settings };
     mkdirSync(dirname(this.path), { recursive: true });
-    const tmp = `${this.path}.tmp`;
+    const tmp = `${this.path}.${process.pid}.tmp`;
     writeFileSync(tmp, JSON.stringify(file, null, 2));
     renameSync(tmp, this.path);
     this.cached = settings;

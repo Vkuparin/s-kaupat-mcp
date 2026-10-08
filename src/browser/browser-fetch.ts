@@ -42,8 +42,10 @@ export function createBrowserFetch(options: BrowserFetchOptions): typeof fetch {
   let lastCall = 0;
 
   const send = async (request: InPageRequest): Promise<InPageResult> => {
-    const wait = lastCall + minIntervalMs - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    // Timers may fire a millisecond early, so wait until the gap has really passed.
+    for (let wait = lastCall + minIntervalMs - Date.now(); wait > 0; wait = lastCall + minIntervalMs - Date.now()) {
+      await new Promise((r) => setTimeout(r, wait));
+    }
     lastCall = Date.now();
     const page = await options.page();
     return page.evaluate(inPageFetch, request);

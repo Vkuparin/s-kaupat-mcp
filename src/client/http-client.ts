@@ -560,7 +560,8 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
   }
 
   async findAddresses(text: string): Promise<AddressSuggestion[]> {
-    const raw = await this.post("AddressSearch", addressSearchQuery(text), {});
+    // The user's address is in these query texts: private keeps S-kaupat's error text about them out of the log.
+    const raw = await this.post("AddressSearch", addressSearchQuery(text), {}, undefined, { private: true });
     const parsed = AddressSearchResponseSchema.safeParse(raw);
     if (!parsed.success) {
       log.warn("Unexpected address search response", { issues: parsed.error.issues.slice(0, 3) });
@@ -582,7 +583,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
   }
 
   async getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodsAnswer> {
-    const raw = await this.post("DeliveryMethods", deliveryMethodsQuery(location), {});
+    const raw = await this.post("DeliveryMethods", deliveryMethodsQuery(location), {}, undefined, { private: true });
     const parsed = DeliveryMethodsResponseSchema.safeParse(raw);
     if (!parsed.success) {
       log.warn("Unexpected delivery methods response", { issues: parsed.error.issues.slice(0, 3) });
@@ -616,7 +617,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
   }
 
   async getHomeDeliveryNear(postalCode: string, startDate: string, endDate: string): Promise<NearbyHomeDelivery[]> {
-    const raw = await this.post("HomeDeliverySlots", homeDeliveryQuery(postalCode, startDate, endDate), {});
+    const raw = await this.post("HomeDeliverySlots", homeDeliveryQuery(postalCode, startDate, endDate), {}, undefined, { private: true });
     const parsed = HomeDeliveryResponseSchema.safeParse(raw);
     if (!parsed.success) {
       log.warn("Unexpected home delivery response", { issues: parsed.error.issues.slice(0, 3) });
@@ -647,7 +648,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
   }
 
   async getPickupPlacesNear(location: DeliveryLocation, date: string, limit: number): Promise<NearbyPickup[]> {
-    const raw = await this.post("NearbyPickup", nearbyPickupQuery(location, date, limit), {});
+    const raw = await this.post("NearbyPickup", nearbyPickupQuery(location, date, limit), {}, undefined, { private: true });
     const parsed = NearbyPickupResponseSchema.safeParse(raw);
     if (!parsed.success) {
       log.warn("Unexpected nearby pickup response", { issues: parsed.error.issues.slice(0, 3) });
@@ -738,9 +739,14 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
     variables: Record<string, unknown>,
     accessToken: string,
   ): Promise<Record<string, unknown>> {
-    let raw: { data?: Record<string, unknown> | null };
+    let raw: { data?: Record<string, unknown> | null; errors?: { message?: string }[] };
     try {
       raw = (await this.post(operationName, query, variables, accessToken)) as typeof raw;
+      // The call's own field null next to an error is a failure too, not an empty answer.
+      const fields = Object.values(raw.data ?? {});
+      if (raw.errors?.length && fields.length > 0 && fields.every((v) => v === null)) {
+        throw new SKaupatError("upstream_error", raw.errors[0]?.message ?? "S-kaupat returned a GraphQL error.");
+      }
     } catch (err) {
       // A list deleted elsewhere (e.g. on the site) comes back as a GraphQL "Not Found" error (live 2026-10-08).
       const listId = variables.shoppingListId ?? variables.id;
@@ -847,7 +853,7 @@ export class HttpSKaupatClient implements SKaupatClient, ShoppingListApi, Delive
         const body = await safeText(response);
         log.warn("S-kaupat rejected a query", { operationName, body: options.private ? redactValues(body) : body });
       }
-      throw new SKaupatError("upstream_error", `S-kaupat API returned HTTP ${response.status}.`);
+      throw new SKaupatError("upstream_error", `S-kaupat API returned HTTP ${response.status}.`, { httpStatus: response.status });
     }
 
     const body: unknown = await response.json();

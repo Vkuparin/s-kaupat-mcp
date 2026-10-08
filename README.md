@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **early (v0.12.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **early (v0.12.1)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -15,7 +15,7 @@ All of these are built by the Release workflow in GitHub Actions.
 
 | Tool | Input | Returns |
 |---|---|---|
-| `get_setup_status` | none | For an app's first screen: the chosen store, login status, `canSearch`, `canUseLists`, and the chosen pickup time (`delivery`) and `nextStep` (`choose_store`, `log_in`, `choose_delivery` or `null`). Never opens a window |
+| `get_setup_status` | none | For an app's first screen: `mode` (`live` or `demo`), the chosen store, login status, `canSearch`, `canUseLists`, and the chosen pickup time (`delivery`) and `nextStep` (`choose_store`, `log_in`, `choose_delivery` or `null`). Never opens a window |
 | `search_stores` | `query` (name, city or postal code), `chain`, `limit`, `includeOpeningHours` | Picker-ready stores: ID, name, chain, address, coordinates, online ordering, today's opening hours, whether it is the selected store |
 | `select_store` | `storeId` | Saves the user's store and returns it with opening hours for the coming week |
 | `get_selected_store` | none | The saved store with opening hours, or `selectedStore: null` when none is chosen yet |
@@ -31,17 +31,17 @@ All of these are built by the Release workflow in GitHub Actions.
 | `get_shopping_list` | `listId`, `storeId` (optional) | One list. Needs login |
 | `create_shopping_list` | `name`, `items[]` (optional), `storeId` (optional) | The new list and, per product, what happened (see below). Needs login |
 | `add_to_shopping_list` | `listId`, `items[]` (`productId`, `quantity`, `allowSubstitutes`), `storeId` (optional) | Per product: `added`, `updated`, `unchanged`, `missing` or `uncertain`. Needs login |
-| `remove_from_shopping_list` | `listId`, `productIds[]` | The list afterwards, with `removed` and `notOnList`. Needs login |
+| `remove_from_shopping_list` | `listId`, `productIds[]` | The list afterwards, with `removed`, `notOnList` and, if some could not be removed, `failed`. Needs login |
 | `delete_shopping_list` | `listId` | Deletes the whole list. Needs login |
 | `find_address` | `query` | Address matches like the site's delivery search box, each with a `location` for `get_delivery_options` |
-| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary), the nearest pickup places with `distanceMeters`, the stores delivering home there, and Pikatoimitus stores. Each option has an `areaId` for `get_delivery_slots`; pickup and home delivery options also have the fee and next free time. All three methods can be ordered in the app |
-| `get_delivery_slots` | `areaId`, `fromDate` (optional), `days` (1 to 14) | A calendar: per day, times with start, end, fee and `status` (`available`, `full`, `closed`, `unknown`) |
+| `get_delivery_options` | `storeId` or `location` (optional), `date` | Pickup places of the store, or with a `location`: the methods offered there (pickup, home delivery, express, with S-kaupat's own summary), the nearest pickup places with `distanceMeters`, the stores delivering home there, and Pikatoimitus stores. Each option has an `areaId` for `get_delivery_slots`; pickup and home delivery options also have the next free time with its fee (`nextSlot.price`; the base `price` is known only for the store's own pickup places). All three methods can be ordered in the app |
+| `get_delivery_slots` | `areaId`, `fromDate` (optional, up to four weeks ahead), `days` (1 to 14) | A calendar: per day, times with start, end, fee and `status` (`available`, `full`, `closed`, `unknown`) |
 | `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
 | `clear_delivery` | none | Forgets the chosen time |
 | `check_basket` | `listId` or `items[]`, `storeId` (optional) | Per product, whether it can be ordered for the chosen time: `ok`, `unavailable` (with S-kaupat's label), `not_in_store`, `not_found` or `unknown` |
 | `open_site` | `applyChoice` (default true) | Opens S-kaupat in the server's own window, where the user is already logged in, with the chosen pickup time filled in, to finish the order there; returns what to tell the user |
 | `get_checkout_options` | `storeId` (optional) | For the app's checkout screen, for the chosen time: payment methods the user can use, saved cards (masked), packaging options and the default, contact details to pre-fill, small-order fee, fees for that time, whether an address is needed. Needs login |
-| `review_order` | `listId` or `items[]`, `payment`, `contact`, `address`, `packagingId`, `note` (all but payment optional) | The order as it would be sent, with per-product checks, S-kaupat's own summary and total, what is `missing`, and a `confirmationCode` when `ready`. Nothing is reserved or ordered. Needs login |
+| `review_order` | `listId` or `items[]`, `payment`, `contact`, `address`, `packagingId`, `note`, `discountCode`, `storeId` (all but payment optional) | The order as it would be sent, with per-product checks, S-kaupat's own summary and total, what is `missing`, and a `confirmationCode` when `ready`. Nothing is reserved or ordered. Needs login |
 | `place_order` | the same inputs, `confirmationCode`, `paymentPage` (`own_window`, `app`, `later`) | Reserves the time and places the order on the user's account; for card payment the payment page (opened in the server's window, or its URL for the app). Needs login |
 | `pay_order` | `orderId`, `cardId`, `saveCard`, `paymentPage` | Starts (or retries) the card payment of an order |
 | `confirm_payment` | `orderId` | After the app's own web view returned from the payment page: S-kaupat authorises the payment |
@@ -97,7 +97,7 @@ Every result carries `schemaVersion`. Failures come back as MCP tool errors (`is
 }
 ```
 
-Apps should branch on `code` or `action`, never on the message text. `action` says what to offer the user (`log_in`, `finish_login`, `choose_store`, `retry`, `check_list`, `refresh_lists`, `choose_other_product`, `install_browser` or `none`) and `retryable` whether trying again later can help. The codes an app is most likely to act on:
+Apps should branch on `code` or `action`, never on the message text. `action` says what to offer the user (`log_in`, `finish_login`, `choose_store`, `choose_delivery`, `choose_delivery_time`, `retry`, `check_list`, `refresh_lists`, `choose_other_product`, `install_browser`, `review_order`, `pay`, `check_orders` or `none`) and `retryable` whether trying again later can help. The codes an app is most likely to act on:
 
 | Code | What the app should do |
 |---|---|
@@ -154,7 +154,7 @@ A list write returns one result per requested product, so the app can show exact
 ```
 
 - `added` / `updated` / `unchanged`: the product is on the list as requested. `item` names the list row (`itemId`, `name`, `quantity`, `allowSubstitutes`); the full product with its price is in `list.items`. A `warning` means S-kaupat's cart check says it can't be ordered right now; it is still on the list, and `allowSubstitutes` decides what the store does.
-- `missing`: not written. `reason` is `unknown_barcode`, `not_sold_in_store`, `no_internal_id` or `write_failed` (then `code` says why, e.g. `session_expired`).
+- `missing`: not written. `reason` is `unknown_barcode`, `not_sold_in_store`, `no_internal_id`, `whole_pieces_only` or `too_many` (code `invalid_quantity`: pieces must be whole, at most 99), or `write_failed` (then `code` says why, e.g. `session_expired`).
 - `uncertain`: S-kaupat did not confirm the write and re-reading the list didn't settle it; ask the user to check the list.
 - `estimatedTotal` is in euros at current shelf prices; `complete` is `false` when a price is missing or approximate (weighed goods).
 
@@ -245,7 +245,7 @@ Every tool sends its own GraphQL query text to `api.s-kaupat.fi`; no persisted-q
 
 If S-kaupat changes its API, a rejected query comes back as `upstream_error`, and the server logs S-kaupat's explanation (which names the changed field) to stderr.
 
-The S-kaupat API is unofficial and undocumented. Use this with your own account for your own shopping; the server never places orders.
+The S-kaupat API is unofficial and undocumented. Use this with your own account for your own shopping; the server places an order only through `place_order`, after the app has shown `review_order`'s summary and the user said yes. `ordering: false` turns ordering off.
 
 ## Project layout
 
@@ -290,4 +290,4 @@ The MCP layer depends only on the `SKaupatClient` interface, so the transport ch
 
 ## Not included yet
 
-Order placement and payment are deliberately left out. See the plan.
+Changing an order after it is placed (the site's order editing), and offers or receipts. A card payment always goes through the payment provider's page.

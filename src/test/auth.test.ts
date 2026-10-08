@@ -296,3 +296,22 @@ test("log out forgets the stored login and clears the browser profile's session"
   assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null });
   await assert.rejects(auth.getAccessToken(), (e: SKaupatError) => e.code === "login_required");
 });
+
+test("after one app logs out and in as someone else, another app stops using the old account", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "skaupat-auth-"));
+  const store = new FileTokenStore(join(dir, "refresh-token"));
+  await store.write("refresh-1");
+  const api = new RotatingApi();
+  const lockPath = join(dir, "refresh.lock");
+  const window = new FakeWindow({ status: "logged_in", login: { refreshToken: "account-2", accessToken: null } });
+  const appA = new LiveAuth({ store, api, window, lockPath, forgetSiteSession: async () => {} });
+  const appB = new LiveAuth({ store, api, window: new FakeWindow({ status: "cancelled" }), lockPath });
+  const oldToken = await appB.getAccessToken();
+  await appA.logout();
+  await assert.rejects(appB.getAccessToken(), (e: SKaupatError) => e.code === "login_required");
+  // The next login must not take the logged-out account's token back from the site's storage.
+  api.valid = "account-2";
+  await appA.startLogin({ timeoutSeconds: 60 });
+  assert.deepEqual(window.stale, ["refresh-2"]);
+  assert.notEqual(await appB.getAccessToken(), oldToken);
+});

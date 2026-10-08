@@ -84,7 +84,7 @@ Each setting comes from, highest first: a command-line flag, an environment vari
 | `mode` | `SKAUPAT_MODE` | `--demo` | `live` | `live` or `demo` (built-in sample stores and products, no network, login always succeeds). `SKAUPAT_DEMO=true` also means demo |
 | `transport` | `SKAUPAT_TRANSPORT` | `--transport` | `browser` | `browser` sends S-kaupat calls from the server's own browser window; `direct` uses plain HTTP, which S-kaupat currently refuses |
 | `dataDir` | `SKAUPAT_DATA_DIR` | `--data-dir` | `%LOCALAPPDATA%\s-kaupat-mcp` | Browser profile, lock files and the login file. Give your app its own folder |
-| `settingsFile` | `SKAUPAT_SETTINGS_FILE` | | `<dataDir>\settings.json` when `dataDir` is set, else `%APPDATA%\s-kaupat-mcp\settings.json` | The user's chosen store |
+| `settingsFile` | `SKAUPAT_SETTINGS_FILE` | | `<dataDir>\settings.json` when `dataDir` is set, else `%APPDATA%\s-kaupat-mcp\settings.json`; `demo-settings.json` next to it in demo mode | The user's chosen store and time |
 | `tokenStore` | `SKAUPAT_TOKEN_STORE` | | `credential-manager` on Windows, `file` elsewhere | Where the login (refresh token) is kept |
 | `tokenFile` | `SKAUPAT_TOKEN_FILE` | | `<dataDir>\refresh-token` | Login file when `tokenStore` is `file` |
 | `browserPath` | `SKAUPAT_BROWSER_PATH` | | Edge, then Chrome | A Chromium-based browser to use instead |

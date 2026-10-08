@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 /**
  * Everything an app can set when it runs the server. Each setting can come
@@ -99,7 +99,11 @@ export function loadConfig(options: LoadConfigOptions = {}): { config: SKaupatCo
     dataDir,
     // With a data folder of its own, an app keeps everything in it; otherwise the store choice stays
     // where earlier versions saved it.
-    settingsFile: resolve(merged.settingsFile ?? (explicitDataDir ? join(dataDir, "settings.json") : defaultSettingsPath(env, platform))),
+    // Demo mode keeps its own pretend store and time apart from the real ones.
+    settingsFile: resolve(
+      merged.settingsFile ??
+        settingsName(explicitDataDir ? join(dataDir, "settings.json") : defaultSettingsPath(env, platform), merged.mode === "demo"),
+    ),
     tokenStore,
     tokenFile: resolve(merged.tokenFile ?? join(dataDir, "refresh-token")),
     browserPath: merged.browserPath ?? null,
@@ -293,6 +297,10 @@ function parseTokenStore(value: string, where: string): SKaupatConfig["tokenStor
 export function defaultDataDir(env: Env = process.env, platform: NodeJS.Platform = process.platform): string {
   if (platform === "win32") return join(env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "s-kaupat-mcp");
   return join(env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "s-kaupat-mcp");
+}
+
+function settingsName(path: string, demo: boolean): string {
+  return demo ? join(dirname(path), "demo-settings.json") : path;
 }
 
 /** %APPDATA%\s-kaupat-mcp\settings.json on Windows, ~/.config/s-kaupat-mcp/settings.json elsewhere. */

@@ -350,3 +350,37 @@ test("the next step names the user's store, which the site asks for before filli
   assert.ok(data.nextStep.fi.includes(store));
   assert.ok(data.nextStep.en.includes(store));
 });
+
+test("a product on the list twice ends as one row with the requested quantity", async () => {
+  const { DEMO_CATALOGUE } = await import("../demo/catalogue.js");
+  const c = new FixtureSKaupatClient();
+  const store = "fixture-store-1";
+  const p = DEMO_CATALOGUE.products.find((x) => x.sokId && x.priceBasis === "per_item")!;
+  const withToken = <T,>(fn: (t: string) => Promise<T>) => fn("t");
+  const row = (quantity: number) => ({ ean: p.id, sokId: p.sokId!, name: p.name, quantity, isReplaceable: true });
+  for (const [first, second] of [[1, 2], [2, 5]]) {
+    let list = await c.createList("t", "dup", store);
+    await c.addItem("t", list.id, row(first!), store);
+    list = await c.addItem("t", list.id, row(second!), store);
+    const r = await addItemsToList({ client: c, lists: c, withToken, storeId: store, list, items: [{ productId: p.id, quantity: 2, allowSubstitutes: true }] });
+    assert.equal(r.results[0]!.status, "updated");
+    assert.deepEqual(r.list.items.filter((i) => i.productId === p.id).map((i) => i.quantity), [2]);
+  }
+});
+
+test("pieces must be whole and at most 99 in total", async () => {
+  const { DEMO_CATALOGUE } = await import("../demo/catalogue.js");
+  const c = new FixtureSKaupatClient();
+  const store = "fixture-store-1";
+  const p = DEMO_CATALOGUE.products.find((x) => x.sokId && x.priceBasis === "per_item")!;
+  const withToken = <T,>(fn: (t: string) => Promise<T>) => fn("t");
+  const list = await c.createList("t", "q", store);
+  const half = await addItemsToList({ client: c, lists: c, withToken, storeId: store, list, items: [{ productId: p.id, quantity: 1.5, allowSubstitutes: true }] });
+  assert.equal(half.results[0]!.status, "missing");
+  assert.equal((half.results[0] as any).error.code, "invalid_quantity");
+  const many = await addItemsToList({
+    client: c, lists: c, withToken, storeId: store, list,
+    items: [{ productId: p.id, quantity: 60, allowSubstitutes: true }, { productId: p.id, quantity: 60, allowSubstitutes: true }],
+  });
+  assert.equal((many.results[0] as any).error.reason, "too_many");
+});

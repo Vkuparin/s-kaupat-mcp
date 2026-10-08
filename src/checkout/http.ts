@@ -235,6 +235,8 @@ export class HttpCheckoutApi implements CheckoutApi {
       const e = toSKaupatError(err);
       // Refused before it reached the order service: nothing was created.
       if (["blocked", "session_expired", "login_in_progress", "browser_unavailable", "browser_busy"].includes(e.code)) throw e;
+      // HTTP 400: S-kaupat rejected the request itself (its API changed), so no order was made.
+      if (e.details?.httpStatus === 400) throw e;
       // Anything else (a timeout, a lost connection, a server error) may have happened after the order was made.
       throw new SKaupatError("order_uncertain", `createOrder did not answer clearly: ${e.message}`);
     }
@@ -421,6 +423,16 @@ function throwOrderError(body: GraphQLBody, stage: "slot" | "order" | "payment")
   }
   // Only the error type names reach the log; S-kaupat's message may quote the order's own values.
   log.warn("Checkout call failed", { stage, types: types.filter(Boolean) });
+  // A request S-kaupat's schema refused never reached the order service.
+  const rejectedRequest = errors.some(
+    (e) =>
+      /got invalid value|is not defined by type|Cannot query field|Unknown argument|Syntax Error/i.test(e.message ?? "") ||
+      /GRAPHQL_(VALIDATION|PARSE)_FAILED|BAD_USER_INPUT/.test(String(e.extensions?.code ?? "")),
+  );
+  if (stage === "order" && !rejectedRequest) {
+    // An unrecognised failure while creating the order may have come after the order was made.
+    throw new SKaupatError("order_uncertain", `createOrder failed: ${redactValues(errors[0]?.message ?? "unknown error").slice(0, 200)}`);
+  }
   throw new SKaupatError("upstream_error", redactValues(errors[0]?.message ?? "S-kaupat returned an error.").slice(0, 200));
 }
 

@@ -43,5 +43,5 @@ export interface SKaupatAuth {
    * Forgets the login on this machine: the stored login and the S-kaupat session in the server's own
    * browser profile, so the next login asks for the account again. Nothing changes on S-kaupat.
    */
-  logout(): Promise<void>;
+  logout(options?: { forgetLocal?: () => void }): Promise<void>;
 }

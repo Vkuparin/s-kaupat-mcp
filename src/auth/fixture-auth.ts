@@ -23,7 +23,8 @@ export class FixtureAuth implements SKaupatAuth {
     return { status: "logged_in", displayName: this.displayName, alreadyLoggedIn };
   }
 
-  async logout(): Promise<void> {
+  async logout(options: { forgetLocal?: () => void } = {}): Promise<void> {
+    options.forgetLocal?.();
     this.loggedIn = false;
   }
 

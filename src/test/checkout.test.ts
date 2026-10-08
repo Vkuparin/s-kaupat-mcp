@@ -8,6 +8,7 @@ import { MemoryOrderStore } from "../checkout/order-store.js";
 import { FixtureSKaupatClient } from "../client/fixture-client.js";
 import type { GraphQLBody } from "../client/http-client.js";
 import { DemoCheckout } from "../demo/checkout.js";
+import { SKaupatError } from "../errors.js";
 import { MemoryStoreSelection } from "../selection.js";
 import { createServer, type SiteWindow } from "../server.js";
 
@@ -474,4 +475,41 @@ test("HTTP adapter: S-kaupat's error text loses the user's values", async () => 
     discountCode: null,
   };
   await assert.rejects(api.createOrder("t", order), (e: any) => e.code === "upstream_error" && !e.message.includes("0401234567") && e.message.includes('Field "x"'));
+});
+
+test("HTTP adapter: a refused request is definite, an unknown failure while ordering is uncertain", async () => {
+  const order = {
+    storeId: "s", slotId: "x", reservationId: null, items: [], packagingId: "p",
+    contact: { firstName: "A", lastName: "B", phone: "0401234567", email: "e" },
+    address: null, payment: "card" as const, note: null, discountCode: null,
+  };
+  const http400 = new HttpCheckoutApi({
+    graphql: async () => {
+      throw new SKaupatError("upstream_error", "S-kaupat API returned HTTP 400.", { httpStatus: 400 });
+    },
+  });
+  await assert.rejects(http400.createOrder("t", order), (e: any) => e.code === "upstream_error");
+  const http502 = new HttpCheckoutApi({
+    graphql: async () => {
+      throw new SKaupatError("upstream_error", "S-kaupat API returned HTTP 502.", { httpStatus: 502 });
+    },
+  });
+  await assert.rejects(http502.createOrder("t", order), (e: any) => e.code === "order_uncertain");
+  const resolverTimeout = new HttpCheckoutApi(fakeApi({ CreateOrder: { data: null, errors: [{ message: "Request timed out" }] } }));
+  await assert.rejects(resolverTimeout.createOrder("t", order), (e: any) => e.code === "order_uncertain");
+});
+
+test("orders waiting for card payment are listed under needsPayment, with a pay step", async () => {
+  const { mcp } = await connect();
+  await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-1", slotId: SLOT });
+  const draft = { items: ITEMS, payment: { method: "card" } };
+  const review = await call(mcp, "review_order", draft);
+  const placed = await call(mcp, "place_order", { ...draft, confirmationCode: review.data.confirmationCode, paymentPage: "later" });
+  assert.equal(placed.data.nextStep.code, "pay");
+  assert.doesNotMatch(placed.data.nextStep.message.en, /opened/);
+  const orders = await call(mcp, "get_orders");
+  assert.deepEqual(orders.data.needsPayment.map((o: any) => o.orderId), [placed.data.order.orderId]);
+  const one = await call(mcp, "get_order", { orderId: placed.data.order.orderId });
+  assert.equal(one.data.nextStep.code, "pay");
+  assert.doesNotMatch(one.data.nextStep.message.en, /opened/);
 });

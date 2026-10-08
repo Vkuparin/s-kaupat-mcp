@@ -24,10 +24,13 @@ export async function launchProfile(options: LaunchOptions): Promise<BrowserCont
   let chromium: typeof import("playwright-core").chromium;
   try {
     ({ chromium } = await import("playwright-core"));
-  } catch {
-    throw new SKaupatError(options.unavailableCode, "playwright-core is not installed.");
+  } catch (err) {
+    throw new SKaupatError(
+      options.unavailableCode,
+      `Could not load playwright-core: ${err instanceof Error ? err.message.split("\n")[0] : String(err)}`,
+    );
   }
-  const executablePath = options.executablePath ?? process.env.SKAUPAT_BROWSER_PATH;
+  const executablePath = options.executablePath;
   const candidates: { channel?: string; executablePath?: string }[] = executablePath
     ? [{ executablePath }]
     : [{ channel: "msedge" }, { channel: "chrome" }];
@@ -54,7 +57,7 @@ export async function launchProfile(options: LaunchOptions): Promise<BrowserCont
   }
   throw new SKaupatError(
     options.unavailableCode,
-    `No usable browser (needs Microsoft Edge or Google Chrome, or SKAUPAT_BROWSER_PATH). ${errors.join("; ")}`,
+    `No usable browser (needs Microsoft Edge or Google Chrome, or the browserPath setting). ${errors.join("; ")}`,
   );
 }
 

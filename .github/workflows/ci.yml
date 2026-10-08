@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - name: Standalone build starts
+        run: |
+          npm run build:standalone
+          node -e "const {execFileSync}=require('child_process');const exe=process.platform==='win32'?'build/standalone/s-kaupat-mcp.exe':'build/standalone/s-kaupat-mcp';const v=execFileSync(exe,['--version']).toString().trim();if(v!==require('./package.json').version)throw new Error('version '+v);console.log('standalone',v)"

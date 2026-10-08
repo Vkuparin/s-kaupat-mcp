@@ -1,6 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import type { Store } from "./client/types.js";
 import { log } from "./log.js";
 
@@ -63,11 +62,3 @@ export class FileStoreSelection implements StoreSelection {
   }
 }
 
-/** %APPDATA%\s-kaupat-mcp\settings.json on Windows, ~/.config/s-kaupat-mcp/settings.json elsewhere. */
-export function defaultSettingsPath(): string {
-  const base =
-    process.platform === "win32"
-      ? (process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"))
-      : (process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"));
-  return join(base, "s-kaupat-mcp", "settings.json");
-}

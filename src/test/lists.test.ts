@@ -14,7 +14,6 @@ import type { ShoppingListApi } from "../lists/types.js";
 import { createServer } from "../server.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const fixtures = join(root, "fixtures", "catalogue.json");
 const docSample = (name: string): unknown =>
   JSON.parse(readFileSync(join(root, "docs", "samples", name), "utf8")).response;
 
@@ -23,7 +22,7 @@ const BREAD = "0000000000024";
 const YOGURT = "0000000000055"; // out of stock in the fixture catalogue
 
 async function connect(lists?: ShoppingListApi) {
-  const client = new FixtureSKaupatClient(fixtures);
+  const client = new FixtureSKaupatClient();
   const auth = new FixtureAuth();
   const server = createServer(client, auth, { lists: lists ?? client });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -148,7 +147,7 @@ test("lists can be read, trimmed and deleted", async () => {
 });
 
 test("a write that times out is re-checked against the list before reporting", async () => {
-  const client = new FixtureSKaupatClient(fixtures);
+  const client = new FixtureSKaupatClient();
   const list = await client.createList("t", "Testi", "fixture-store-1");
   const flaky: ShoppingListApi = {
     ...client,
@@ -176,7 +175,7 @@ test("a write that times out is re-checked against the list before reporting", a
 });
 
 test("an expired login part-way reports the rest as missing", async () => {
-  const client = new FixtureSKaupatClient(fixtures);
+  const client = new FixtureSKaupatClient();
   const list = await client.createList("t", "Testi", "fixture-store-1");
   let writes = 0;
   const lists: ShoppingListApi = Object.assign(Object.create(client), {
@@ -295,7 +294,7 @@ test("the cart check maps the captured validateCart sample", async () => {
 });
 
 test("changing a quantity never takes the product off the list, even when a write fails", async () => {
-  const client = new FixtureSKaupatClient(fixtures);
+  const client = new FixtureSKaupatClient();
   let list = await client.createList("t", "Testi", "fixture-store-1");
   list = (await addItemsToList({
     client,
@@ -324,7 +323,7 @@ test("changing a quantity never takes the product off the list, even when a writ
 });
 
 test("a new list is returned even if no product could be written", async () => {
-  const client = new FixtureSKaupatClient(fixtures);
+  const client = new FixtureSKaupatClient();
   const list = await client.createList("t", "Uusi", "fixture-store-1");
   const lists: ShoppingListApi = Object.assign(Object.create(client), {
     addItem: async () => {

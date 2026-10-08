@@ -1,0 +1,49 @@
+name: Release
+
+# Builds everything an app or a user installs, for Windows:
+#   s-kaupat-mcp.exe             the server with Node inside; nothing else needed
+#   s-kaupat-mcp.cjs             the server as one JavaScript file, for apps that ship Node
+#   s-kaupat-mcp-<version>.tgz   the npm package (command line and library)
+#   s-kaupat-<version>.mcpb      the Claude Desktop extension
+# Run it by hand (Actions → Release → Run workflow) to get the files as a build artifact, or push a
+# tag like v0.5.0 to also publish them as a GitHub release.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:standalone
+      - run: npm run pack:extension
+      - run: npm pack --pack-destination build
+      - name: Collect files
+        shell: bash
+        run: |
+          mkdir -p release
+          cp build/standalone/s-kaupat-mcp.exe build/standalone/s-kaupat-mcp.cjs release/
+          cp build/s-kaupat-mcp-*.tgz s-kaupat-*.mcpb release/
+          ./release/s-kaupat-mcp.exe --version
+          ls -l release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: s-kaupat-mcp-windows
+          path: release/
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --generate-notes

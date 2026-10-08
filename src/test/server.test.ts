@@ -16,10 +16,10 @@ import { createServer, SERVER_VERSION } from "../server.js";
 import type { SKaupatClient } from "../client/types.js";
 import type { ShoppingListApi } from "../lists/types.js";
 
-const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "fixtures", "catalogue.json");
+const root = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 async function connect(
-  client: SKaupatClient = new FixtureSKaupatClient(fixtures),
+  client: SKaupatClient = new FixtureSKaupatClient(),
   {
     selection,
     auth = new FixtureAuth(),
@@ -297,8 +297,8 @@ test("browse_category pages through a category, cheapest first", async () => {
 });
 
 test("the Claude Desktop extension manifest lists exactly the server's tools", async () => {
-  const manifest = JSON.parse(readFileSync(join(dirname(fixtures), "..", "manifest.json"), "utf8"));
-  const pkg = JSON.parse(readFileSync(join(dirname(fixtures), "..", "package.json"), "utf8"));
+  const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf8"));
+  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   const { tools } = await (await connect()).listTools();
   assert.deepEqual(manifest.tools.map((t: any) => t.name).sort(), tools.map((t) => t.name).sort());
   assert.equal(manifest.version, pkg.version);

@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { listNotFound, storeNotFound } from "../errors.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi } from "../lists/types.js";
 import { finnishDate } from "../stores.js";
+import { DEMO_CATALOGUE } from "../demo/catalogue.js";
 import type {
   BasketCheck,
   BrowseCategoryInput,
@@ -35,7 +36,7 @@ type StoredItem = ListItemInput & { id: string };
 
 type FixtureHours = "ALL_DAY" | "CLOSED" | { open: string; close: string };
 
-interface Catalogue {
+export interface Catalogue {
   stores: (Store & { hours?: FixtureHours })[];
   /** `sokId` is S Group's internal id (needed for list writes); `orderable: false` makes the cart check report it unavailable. */
   products: (FixtureProduct & { sokId?: string; orderable?: boolean; details?: Partial<ProductDetailFields> })[];
@@ -54,9 +55,12 @@ export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi {
   private readonly lists = new Map<string, { id: string; name: string; createdAt: string; items: StoredItem[] }>();
   private nextId = 1;
 
-  constructor(catalogue: Catalogue | string) {
+  /** A catalogue object, or the path of a JSON file with one. Defaults to the built-in demo catalogue. */
+  constructor(catalogue: Catalogue | string = DEMO_CATALOGUE) {
     this.catalogue =
-      typeof catalogue === "string" ? (JSON.parse(readFileSync(catalogue, "utf8")) as Catalogue) : catalogue;
+      typeof catalogue === "string"
+        ? (JSON.parse(readFileSync(catalogue, "utf8")) as Catalogue)
+        : structuredClone(catalogue);
   }
 
   async searchStores({ query, chain, limit }: SearchStoresInput): Promise<StoreSearchResult> {

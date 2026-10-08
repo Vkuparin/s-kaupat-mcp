@@ -3,14 +3,15 @@ import { listNotFound, storeNotFound } from "../errors.js";
 import type { ListItemInput, ShoppingList, ShoppingListApi } from "../lists/types.js";
 import { finnishDate } from "../stores.js";
 import { DEMO_CATALOGUE } from "../demo/catalogue.js";
-import { demoAddresses, demoCalendar, demoDeliveryMethods, demoPickupAreas, demoPickupNear } from "../demo/delivery.js";
+import { demoAddresses, demoCalendar, demoDeliveryMethods, demoHomeDelivery, demoPickupAreas, demoPickupNear } from "../demo/delivery.js";
 import type {
   AddressSuggestion,
   DeliveryApi,
   DeliveryArea,
   DeliveryCalendar,
   DeliveryLocation,
-  DeliveryMethodAvailability,
+  DeliveryMethodsAnswer,
+  NearbyHomeDelivery,
   NearbyPickup,
 } from "../delivery/types.js";
 import type {
@@ -269,8 +270,12 @@ export class FixtureSKaupatClient implements SKaupatClient, ShoppingListApi, Del
     return demoAddresses(text);
   }
 
-  async getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodAvailability[]> {
-    return demoDeliveryMethods(location);
+  async getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodsAnswer> {
+    return demoDeliveryMethods(location, this.catalogue.stores);
+  }
+
+  async getHomeDeliveryNear(postalCode: string, startDate: string, endDate: string): Promise<NearbyHomeDelivery[]> {
+    return demoHomeDelivery(this.catalogue.stores, postalCode, startDate, endDate, this.now());
   }
 
   async getPickupPlacesNear(location: DeliveryLocation, date: string, limit: number): Promise<NearbyPickup[]> {

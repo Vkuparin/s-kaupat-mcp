@@ -4,8 +4,9 @@ import type {
   DeliveryArea,
   DeliveryCalendar,
   DeliveryLocation,
-  DeliveryMethodAvailability,
+  DeliveryMethodsAnswer,
   DeliverySlot,
+  NearbyHomeDelivery,
   NearbyPickup,
 } from "../delivery/types.js";
 import type { Store } from "../client/types.js";
@@ -26,10 +27,13 @@ export function demoPickupAreas(store: Store, index: number, now: Date): Deliver
 }
 
 export function demoCalendar(store: Store, index: number, areaId: string, startDate: string, endDate: string, now: Date): DeliveryCalendar | null {
-  const found = demoPickupAreas(store, index, now).find((a) => a.areaId === areaId);
+  const found = [...demoPickupAreas(store, index, now), demoHomeArea(store, now)].find((a) => a.areaId === areaId);
   if (!found) return null;
+  const extra = found.method === "home_delivery" ? 5 : 0;
   const slots: DeliverySlot[] = [];
-  for (let date = startDate; date <= endDate; date = nextDate(date)) slots.push(...daySlots(areaId, date, now));
+  for (let date = startDate; date <= endDate; date = nextDate(date)) {
+    slots.push(...daySlots(areaId, date, now).map((s) => ({ ...s, price: s.price == null ? null : Math.round((s.price + extra) * 100) / 100 })));
+  }
   return { area: found, slots };
 }
 
@@ -87,8 +91,8 @@ function helsinkiIso(date: string, hour: number): string {
 
 /** Made-up addresses for demo mode: a home in Helsinki and one in Tampere. */
 const DEMO_ADDRESSES: AddressSuggestion[] = [
-  { addressId: "demo-address-1", title: "Esimerkkitie 5, Helsinki", street: "Esimerkkitie 5", postalCode: "00100", city: "Helsinki", latitude: 60.171, longitude: 24.941, kind: "address", areaId: null },
-  { addressId: "demo-address-2", title: "Mallikatu 10, Tampere", street: "Mallikatu 10", postalCode: "33100", city: "Tampere", latitude: 61.49, longitude: 23.77, kind: "address", areaId: null },
+  { addressId: "demo-address-1", title: "Esimerkkitie 5, Helsinki", street: "Esimerkkitie 5", postalCode: "00100", city: "Helsinki", latitude: 60.171, longitude: 24.941, kind: "houseNumber" },
+  { addressId: "demo-address-2", title: "Mallikatu 10, Tampere", street: "Mallikatu 10", postalCode: "33100", city: "Tampere", latitude: 61.49, longitude: 23.77, kind: "houseNumber" },
 ];
 
 export function demoAddresses(text: string): AddressSuggestion[] {
@@ -98,25 +102,56 @@ export function demoAddresses(text: string): AddressSuggestion[] {
 }
 
 /** Pickup everywhere; home delivery in the Helsinki area (postal codes 00…); express only in 00100. */
-export function demoDeliveryMethods(location: DeliveryLocation): DeliveryMethodAvailability[] {
+export function demoDeliveryMethods(location: DeliveryLocation, stores: Store[]): DeliveryMethodsAnswer {
   const helsinki = location.postalCode.startsWith("00");
-  return [
-    { method: "pickup", available: true, name: "Nouto", summary: "0–5,90 €, tänään", variants: ["PICKUP_PLANNED"] },
-    {
-      method: "home_delivery",
-      available: helsinki,
-      name: "Kotiinkuljetus",
-      summary: helsinki ? "8,90–14,90 €, huomenna" : "Ei saatavilla",
-      variants: ["HOME_DELIVERY_PLANNED"],
-    },
-    {
-      method: "express",
-      available: location.postalCode === "00100",
-      name: "Pikatoimitus",
-      summary: location.postalCode === "00100" ? "Noin tunti tilauksesta" : "Ei saatavilla",
-      variants: ["HOME_DELIVERY_ONE_HOUR"],
-    },
-  ];
+  const express = location.postalCode === "00100";
+  return {
+    methods: [
+      { method: "pickup", available: true, name: "Nouto", summary: "0–5,90 € • Tänään", variants: ["PICKUP_PLANNED"] },
+      {
+        method: "home_delivery",
+        available: helsinki,
+        name: "Kotiinkuljetus",
+        summary: helsinki ? "8,90–14,90 € • Huomenna" : "Ei saatavilla",
+        variants: ["HOME_DELIVERY_PLANNED"],
+      },
+      {
+        method: "express",
+        available: express,
+        name: "Pikatoimitus",
+        summary: express ? "Saatavilla • Noin tunti tilauksesta" : "Ei saatavilla",
+        variants: ["HOME_DELIVERY_ONE_HOUR"],
+      },
+    ],
+    expressStores:
+      express && stores[0]
+        ? [
+            {
+              kind: "one_hour",
+              areaId: `demo-express-${stores[0].id}`,
+              storeId: stores[0].id,
+              storeName: stores[0].name,
+              available: true,
+              summary: "Noin tunti tilauksesta",
+              details: null,
+              fee: "9,90 €",
+            },
+          ]
+        : [],
+  };
+}
+
+/** Home delivery from the first Helsinki store to Helsinki postal codes; slots cost 5 € more than pickup. */
+export function demoHomeArea(store: Store, now: Date): DeliveryArea {
+  return { ...area(store, `demo-home-${store.id}`, store.name, 8.9, now), method: "home_delivery", address: null };
+}
+
+export function demoHomeDelivery(stores: Store[], postalCode: string, startDate: string, endDate: string, now: Date): NearbyHomeDelivery[] {
+  const store = stores.find((s) => s.city === "Helsinki");
+  if (!postalCode.startsWith("00") || !store) return [];
+  const home = demoHomeArea(store, now);
+  const slots = demoCalendar(store, stores.indexOf(store), home.areaId, startDate, endDate, now)?.slots.filter((s) => s.status === "available") ?? [];
+  return [{ area: { ...home, nextSlot: slots[0] ?? null }, slots, expressSlots: [] }];
 }
 
 export function demoPickupNear(stores: Store[], location: DeliveryLocation, date: string, limit: number, now: Date): NearbyPickup[] {
@@ -128,6 +163,7 @@ export function demoPickupNear(stores: Store[], location: DeliveryLocation, date
         area,
         distanceMeters: distance,
         slots: demoCalendar(store, index, area.areaId, date, date, now)?.slots ?? [],
+        expressSlots: [],
       }));
     })
     .sort((a, b) => a.distanceMeters - b.distanceMeters)

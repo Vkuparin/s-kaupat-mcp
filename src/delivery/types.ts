@@ -76,10 +76,8 @@ export interface AddressSuggestion {
   city: string | null;
   latitude: number | null;
   longitude: number | null;
-  /** S-kaupat's kind of match as it reports it, e.g. "place" for a pickup place. */
+  /** S-kaupat's kind of match as it reports it: "houseNumber" or "street" for addresses, "place" for places. */
   kind: string | null;
-  /** For a pickup place match: its areaId, usable with get_delivery_slots directly. */
-  areaId: string | null;
 }
 
 /** Where to look for delivery: a postal code and coordinates, as an address search returns them. */
@@ -102,12 +100,42 @@ export interface DeliveryMethodAvailability {
   variants: string[];
 }
 
+/** A store that delivers within about an hour (Pikatoimitus): by courier ("one_hour") or by robot. */
+export interface ExpressStore {
+  kind: "one_hour" | "robot";
+  areaId: string | null;
+  storeId: string | null;
+  storeName: string | null;
+  available: boolean | null;
+  /** S-kaupat's own texts in Finnish, e.g. "Noin tunti tilauksesta". */
+  summary: string | null;
+  details: string | null;
+  /** The fee as S-kaupat formats it, e.g. "9,90 €". */
+  fee: string | null;
+}
+
+export interface DeliveryMethodsAnswer {
+  methods: DeliveryMethodAvailability[];
+  /** Stores offering Pikatoimitus to this location. */
+  expressStores: ExpressStore[];
+}
+
+/** One store's home delivery to a postal code, with its times. */
+export interface NearbyHomeDelivery {
+  area: DeliveryArea;
+  slots: DeliverySlot[];
+  /** Fast-track times (delivered soon after ordering), chosen on the site for now. */
+  expressSlots: DeliverySlot[];
+}
+
 /** A pickup place near a location, with its times on one day. */
 export interface NearbyPickup {
   area: DeliveryArea;
   /** Distance from the location in metres, rounded (S-kaupat reports metres; confirmed live 2026-10-08). */
   distanceMeters: number | null;
   slots: DeliverySlot[];
+  /** "Pikanouto" times (ready soon after ordering), chosen on the site for now. */
+  expressSlots: DeliverySlot[];
 }
 
 export interface DeliveryApi {
@@ -121,9 +149,11 @@ export interface DeliveryApi {
   /** Addresses and pickup places matching what the user typed. */
   findAddresses(text: string): Promise<AddressSuggestion[]>;
   /** Which ways of getting the order are offered at a location. */
-  getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodAvailability[]>;
+  getDeliveryMethods(location: DeliveryLocation): Promise<DeliveryMethodsAnswer>;
   /** Pickup places near a location with their times on `date`, nearest first. */
   getPickupPlacesNear(location: DeliveryLocation, date: string, limit: number): Promise<NearbyPickup[]>;
+  /** Stores delivering home to this postal code, with their times from startDate to endDate. */
+  getHomeDeliveryNear(postalCode: string, startDate: string, endDate: string): Promise<NearbyHomeDelivery[]>;
 }
 
 /** What the user chose, as saved next to the store choice. */

@@ -9,15 +9,15 @@ import { FixtureAuth } from "../auth/fixture-auth.js";
 import { FixtureSKaupatClient } from "../client/fixture-client.js";
 import { HttpSKaupatClient } from "../client/http-client.js";
 import { FileStoreSelection, MemoryStoreSelection, type StoreSelection } from "../selection.js";
-import { createServer } from "../server.js";
+import { createServer, type SiteWindow } from "../server.js";
 
 /** 2026-10-08 09:00 in Finland, a Thursday; the 8th is an even day, so its 16–18 slot is full. */
 const MORNING = new Date("2026-10-08T06:00:00Z");
 
-async function connect(clock: { now: Date }, selection: StoreSelection = new MemoryStoreSelection()) {
+async function connect(clock: { now: Date }, selection: StoreSelection = new MemoryStoreSelection(), site?: SiteWindow) {
   const now = () => clock.now;
   const client = new FixtureSKaupatClient(undefined, now);
-  const server = createServer(client, new FixtureAuth(), { selection, lists: client, delivery: client, now });
+  const server = createServer(client, new FixtureAuth(), { selection, lists: client, delivery: client, now, site });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const mcp = new Client({ name: "test", version: "0.0.0" });
   await Promise.all([server.connect(serverTransport), mcp.connect(clientTransport)]);
@@ -294,4 +294,185 @@ test("the cart check sends the chosen time", async () => {
     areaId: "a",
     items: [{ ean: "1", itemCount: "2" }],
   });
+});
+
+test("open_site fills in the chosen pickup time on the site before opening it", async () => {
+  const storage = new Map<string, string>([
+    ["store-storage", JSON.stringify({ state: { storeId: "513971200", selectedBrand: "s-market" }, version: 0 })],
+    ["uc_settings", "{}"],
+  ]);
+  const opened: string[] = [];
+  const site: SiteWindow = {
+    open: async (url) => void opened.push(url),
+    storage: async () => ({ entries: [...storage.entries()], userPagePath: null }),
+    writeStorage: async (entries) => entries.forEach(([k, v]) => storage.set(k, v)),
+  };
+  const mcp = await connect({ now: MORNING }, new MemoryStoreSelection(), site);
+
+  const plain = await call(mcp, "open_site");
+  assert.equal(plain.data.prefilled, false);
+
+  await call(mcp, "select_store", { storeId: "fixture-store-1" });
+  const slots = await call(mcp, "get_delivery_slots", { areaId: "demo-pickup-fixture-store-1", fromDate: "2026-10-09", days: 1 });
+  const slot = slots.data.days[0].slots[0];
+  await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-1", slotId: slot.slotId });
+
+  const res = await call(mcp, "open_site");
+  assert.equal(res.isError, false);
+  assert.equal(res.data.prefilled, true);
+  assert.match(res.data.nextStep.fi, /Valittu aika on valmiina/);
+  assert.equal(opened.length, 2);
+  const store = JSON.parse(storage.get("store-storage")!);
+  assert.equal(store.state.storeId, "fixture-store-1");
+  assert.equal(store.state.deliveryStore.areaId, "demo-pickup-fixture-store-1");
+  const delivery = JSON.parse(storage.get("delivery-storage")!);
+  assert.equal(delivery.state.selectedAreaId, "demo-pickup-fixture-store-1");
+  assert.deepEqual(
+    [delivery.state.deliveryDetailsInfo.deliverySlotId, delivery.state.deliveryDetailsInfo.deliveryDate, delivery.state.deliveryDetailsInfo.deliveryTime],
+    [slot.slotId, "2026-10-09", "10:00"],
+  );
+  assert.equal(JSON.parse(storage.get("delivery-state")!).method, "PICKUP");
+  assert.equal(storage.get("uc_settings"), "{}");
+
+  const skipped = await call(mcp, "open_site", { applyChoice: false });
+  assert.equal(skipped.data.prefilled, false);
+});
+
+test("from an address: methods offered there and the nearest pickup places", async () => {
+  const mcp = await connect({ now: MORNING });
+  const none = await call(mcp, "find_address", { query: "Helsinki 99" });
+  assert.deepEqual(none.data.addresses, []);
+  assert.ok(none.data.hint.fi);
+
+  const found = await call(mcp, "find_address", { query: "esimerkkitie 5" });
+  assert.equal(found.data.addresses.length, 1);
+  const location = found.data.addresses[0].location;
+  assert.deepEqual(location, { postalCode: "00100", latitude: 60.171, longitude: 24.941 });
+
+  const res = await call(mcp, "get_delivery_options", { location });
+  assert.equal(res.isError, false);
+  assert.equal(res.data.date, "2026-10-08");
+  assert.deepEqual(
+    res.data.methods.map((m: any) => [m.method, m.available]),
+    [
+      ["pickup", true],
+      ["home_delivery", true],
+      ["express", true],
+    ],
+  );
+  assert.deepEqual(res.data.siteOnlyMethods, ["home_delivery", "express"]);
+  // Nearest first: the Helsinki store's two areas, then the other Helsinki store.
+  assert.deepEqual(
+    res.data.options.slice(0, 3).map((o: any) => o.areaId),
+    ["demo-pickup-fixture-store-1", "demo-locker-fixture-store-1", "demo-pickup-fixture-store-3"],
+  );
+  assert.ok(res.data.options[0].distanceMeters < 200);
+  assert.equal(res.data.options[0].freeTimesOnDate, 2);
+  assert.equal(JSON.stringify(res.data).includes("Esimerkkitie"), false);
+
+  // A place found by address can be chosen; the store follows it.
+  const slots = await call(mcp, "get_delivery_slots", { areaId: "demo-pickup-fixture-store-3", fromDate: "2026-10-09", days: 1 });
+  const chosen = await call(mcp, "select_delivery", { areaId: "demo-pickup-fixture-store-3", slotId: slots.data.days[0].slots[0].slotId });
+  assert.equal(chosen.isError, false);
+  assert.equal((await call(mcp, "get_selected_store")).data.selectedStore.id, "fixture-store-3");
+
+  const tampere = await call(mcp, "get_delivery_options", { location: { postalCode: "33100", latitude: 61.49, longitude: 23.77 } });
+  assert.deepEqual(tampere.data.siteOnlyMethods, []);
+});
+
+test("the HTTP client maps address search, delivery methods and nearby pickup places", async () => {
+  const sent: any[] = [];
+  const client = new HttpSKaupatClient({
+    fetchImpl: scriptedFetch(
+      [
+        {
+          data: {
+            addressAutosuggest: [
+              { id: "area-22595800", title: "Prisma Herttoniemi noutolokero", streetAddress: "Insinöörinkatu 2", postalCode: "00880", city: "Helsinki", latitude: 60.19, longitude: 25.03, resultType: "place" },
+              { id: "x1", title: "Testikatu 1, Helsinki", streetAddress: "Testikatu 1", postalCode: "00930", city: "Helsinki", latitude: 60.2, longitude: 25.08, resultType: "Address" },
+            ],
+          },
+        },
+        {
+          data: {
+            lookupLocationDeliveryAvailability: {
+              deliveryOptions: [
+                { __typename: "SlotsOption", deliveryOptionType: "PICKUP_SLOTS", name: "Nouto", deliveryMethods: [{ id: "PICKUP_PLANNED", deliveryType: "PICKUP_PLANNED" }] },
+                { __typename: "SlotsOption", deliveryOptionType: "HOME_DELIVERY_SLOTS", name: "Kotiinkuljetus", deliveryMethods: [{ id: "HOME_DELIVERY_PLANNED", deliveryType: "HOME_DELIVERY_PLANNED" }] },
+                { __typename: "StoresOption", deliveryOptionType: "FAST_TRACK_STORES", name: "Pikatoimitus", deliveryMethods: [{ id: "HOME_DELIVERY_ONE_HOUR", deliveryType: "HOME_DELIVERY_ONE_HOUR" }] },
+              ],
+            },
+          },
+        },
+        {
+          data: {
+            lookupLocationDeliveryAvailability: {
+              deliveryOptions: [
+                { __typename: "SlotsOption", deliveryOptionType: "PICKUP_SLOTS", name: "Nouto", deliveryMethods: [{ id: "PICKUP_PLANNED", deliveryType: "PICKUP_PLANNED" }], slotsDeliveryOptionAvailability: { status: "AVAILABLE", summary: "0–5,90 €, tänään" } },
+                { __typename: "SlotsOption", deliveryOptionType: "HOME_DELIVERY_SLOTS", name: "Kotiinkuljetus", deliveryMethods: [{ id: "HOME_DELIVERY_PLANNED", deliveryType: "HOME_DELIVERY_PLANNED" }], slotsDeliveryOptionAvailability: { status: "AVAILABLE", summary: "8,90–14,90 €, huomenna" } },
+                { __typename: "StoresOption", deliveryOptionType: "FAST_TRACK_STORES", name: "Pikatoimitus", deliveryMethods: [{ id: "HOME_DELIVERY_ONE_HOUR", deliveryType: "HOME_DELIVERY_ONE_HOUR" }], storeDeliveryOptionAvailability: { status: "UNAVAILABLE", summary: "Ei saatavilla" } },
+              ],
+            },
+          },
+        },
+        {
+          data: {
+            pickupSlotsForCoordinates: {
+              slotsInPickupPoints: [
+                {
+                  distance: 3100.4,
+                  store: { id: "726109200", brand: "prisma" },
+                  pickupPoint: { id: "22595800-area", name: "Prisma Herttoniemi noutolokero", description: " ", address: { street: " Insinöörinkatu 2", city: "Helsinki", postalCode: "00880" } },
+                  slots: [
+                    { id: "2099-10-09:b", price: 0.9, closingTime: "2099-10-09T10:45:00.000+03:00", deliveryTimeStart: "2099-10-09T13:00:00.000+03:00", deliveryTimeEnd: "2099-10-09T14:00:00.000+03:00", isAlcoholSellingAllowed: true },
+                    { id: "2099-10-09:a", price: 0, closingTime: "2099-10-09T09:45:00.000+03:00", deliveryTimeStart: "2099-10-09T12:00:00.000+03:00", deliveryTimeEnd: "2099-10-09T13:00:00.000+03:00", isAlcoholSellingAllowed: true },
+                  ],
+                },
+                { distance: 5000, store: { id: "1" }, pickupPoint: null, slots: [] },
+              ],
+            },
+          },
+        },
+      ],
+      sent,
+    ),
+  });
+  const [locker, address] = await client.findAddresses('Testikatu "1"');
+  assert.equal(locker!.areaId, "22595800");
+  assert.equal(address!.areaId, null);
+  assert.match(sent[0].query, /addressAutosuggest\(countryCode: "FI", query: "Testikatu \\"1\\"", searchContext: DELIVERY_METHOD_SELECTION\)/);
+  assert.equal(address!.postalCode, "00930");
+  const location = { postalCode: address!.postalCode!, latitude: address!.latitude!, longitude: address!.longitude! };
+
+  const methods = await client.getDeliveryMethods(location);
+  assert.doesNotMatch(sent[1].query, /\.\.\. on/);
+  assert.match(sent[2].query, /\.\.\. on SlotsOption \{ slotsDeliveryOptionAvailability/);
+  assert.match(sent[2].query, /\.\.\. on StoresOption \{ storeDeliveryOptionAvailability/);
+  assert.match(sent[2].query, /postalCode: "00930", coordinates: \{ latitude: 60.2, longitude: 25.08 \}/);
+  assert.deepEqual(
+    methods.map((m) => [m.method, m.available, m.summary, m.variants]),
+    [
+      ["pickup", true, "0–5,90 €, tänään", ["PICKUP_PLANNED"]],
+      ["home_delivery", true, "8,90–14,90 €, huomenna", ["HOME_DELIVERY_PLANNED"]],
+      ["express", false, "Ei saatavilla", ["HOME_DELIVERY_ONE_HOUR"]],
+    ],
+  );
+
+  const places = await client.getPickupPlacesNear(location, "2099-10-09", 8);
+  assert.match(sent[3].query, /pickupSlotsForCoordinates\(startDate: "2099-10-09", endDate: "2099-10-09", closeToCoordinates: \{ latitude: 60.2, longitude: 25.08 \}, limit: 8\)/);
+  assert.equal(places.length, 1);
+  const place = places[0]!;
+  assert.equal(place.distanceMeters, 3100);
+  assert.equal(place.area.areaId, "22595800-area");
+  assert.equal(place.area.storeId, "726109200");
+  assert.equal(place.area.description, null);
+  assert.equal(place.area.address!.street, "Insinöörinkatu 2");
+  assert.deepEqual(
+    place.slots.map((s) => [s.slotId, s.price, s.status, s.start]),
+    [
+      ["2099-10-09:a", 0, "available", "2099-10-09T09:00:00.000Z"],
+      ["2099-10-09:b", 0.9, "available", "2099-10-09T10:00:00.000Z"],
+    ],
+  );
+  assert.equal(place.area.nextSlot!.slotId, "2099-10-09:a");
 });

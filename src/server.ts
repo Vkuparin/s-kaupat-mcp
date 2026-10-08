@@ -9,12 +9,12 @@ import type { SKaupatAuth } from "./auth/types.js";
 import { PRODUCT_SORTS, STORE_CHAINS, type Category, type SKaupatClient, type Store, type StoreDetails } from "./client/types.js";
 import { MemoryStoreSelection, type SavedStore, type StoreSelection } from "./selection.js";
 import { chainName, finnishDate, openingHoursOn, openingHoursWeek } from "./stores.js";
-import { deliveryInstruction, isExpired } from "./delivery/format.js";
+import { deliveryInstruction, isExpired, localTime } from "./delivery/format.js";
 import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.js";
-import { readSiteChoice } from "./browser/site-state.js";
+import { prefillEntries, readSiteChoice, type SitePrefill } from "./browser/site-state.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.6.2";
+export const SERVER_VERSION = "0.7.0";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 
@@ -47,6 +47,8 @@ export interface SiteWindow {
   open(url: string): Promise<void>;
   /** The site's localStorage in that browser, and the path the user's window is on. */
   storage(): Promise<{ entries: [string, string][]; userPagePath: string | null }>;
+  /** Sets these localStorage entries of the site in that browser. */
+  writeStorage(entries: [string, string][]): Promise<void>;
 }
 
 const SITE_URL = "https://www.s-kaupat.fi/";
@@ -58,7 +60,7 @@ export const SERVER_INSTRUCTIONS = [
   "2. Search with search_products (queries in Finnish work best, e.g. 'maito', 'ruisleipä') or browse with list_categories and browse_category.",
   "3. Shopping lists need a login. If a call fails with error.action log_in, ask the user to log in; call start_login only when the user agrees, never on your own.",
   "4. Put products on a list with create_shopping_list or add_to_shopping_list and tell the user what each result says (added, missing with reason, warnings).",
-  "5. Optionally let the user pick a pickup time: get_delivery_options, then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots.",
+  "5. Optionally let the user pick a pickup time: find_address (their street address) and get_delivery_options with its location (or with just the store), then get_delivery_slots (a calendar with prices), then select_delivery. check_basket then checks a list against that day. Times fill up, so always show fresh slots. Home delivery and express times are picked on the site.",
   "6. The user finishes on the S-kaupat site: open the list, press 'Lisää kaikki ostoskoriin' (the site asks for the store and pickup or delivery; nextStep says exactly what to pick), check out. open_site opens S-kaupat in this server's own window, where the user is already logged in. These tools never place orders, reserve times or pay.",
   "Every error has code, action, retryable and userMessage {fi, en}; show userMessage to the user in their language and follow action.",
 ].join("\n");
@@ -600,20 +602,103 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
   };
 
   server.registerTool(
+    "find_address",
+    {
+      title: "Find an address for pickup or delivery",
+      description:
+        "Searches addresses the way the site's 'Valitse toimitustapa' search box does: a street address with the " +
+        "city works best, e.g. 'Mannerheimintie 1, Helsinki' (a city name alone finds nothing). Each match has a " +
+        "title to show and a location (postalCode, latitude, longitude) to pass to get_delivery_options. Matches can " +
+        "also be pickup places (kind 'place', with an areaId for get_delivery_slots). The " +
+        "address is not saved by this server; the app may keep it for the user.",
+      inputSchema: {
+        query: z.string().trim().min(3).max(120).describe("What the user typed, e.g. 'Kauppakartanonkatu 7, Helsinki'."),
+      },
+      annotations: { readOnlyHint: true, openWorldHint: true },
+    },
+    async ({ query }) =>
+      run("find_address", async () => {
+        const found = await requireDelivery().findAddresses(query);
+        const addresses = found.map((a) => ({
+          addressId: a.addressId,
+          title: a.title,
+          street: a.street,
+          postalCode: a.postalCode,
+          city: a.city,
+          kind: a.kind,
+          areaId: a.areaId,
+          location:
+            a.postalCode && a.latitude != null && a.longitude != null
+              ? { postalCode: a.postalCode, latitude: a.latitude, longitude: a.longitude }
+              : null,
+        }));
+        return {
+          addresses,
+          ...(addresses.length === 0
+            ? { hint: { fi: "Kirjoita katuosoite ja kaupunki, esim. Mannerheimintie 1, Helsinki.", en: "Type a street address and city, e.g. Mannerheimintie 1, Helsinki." } }
+            : {}),
+        };
+      }),
+  );
+
+  server.registerTool(
     "get_delivery_options",
     {
       title: "Get pickup and delivery options",
       description:
-        "Ways to get an order from the user's store, for the first step of choosing a time (the site's " +
-        "'Valitse toimitustapa'). Each option has an areaId for get_delivery_slots, a method (pickup, " +
-        "home_delivery, express), a base fee, a pickup address and nextSlot, the next free time, so the app " +
-        "can show 'next free: tomorrow 10–12' at once. Pickup options are listed now; home delivery and " +
-        "express need an address and are listed in methodsNotYetSupported until that is added.",
-      inputSchema: { storeId },
+        "Ways to get an order, for the first step of choosing a time (the site's 'Valitse toimitustapa'). " +
+        "Without location: the pickup places of the user's store. With location (from find_address): which " +
+        "methods are offered there (pickup, home_delivery, express, each with S-kaupat's own Finnish summary such " +
+        "as '8,90–14,90 €, huomenna') and the pickup places nearest to it with distanceMeters and the next free time. " +
+        "Each option has an areaId for get_delivery_slots and nextSlot, so the app can show 'next free: tomorrow " +
+        "10–12' at once. Home delivery and express times are chosen on the site for now (siteOnlyMethods).",
+      inputSchema: {
+        storeId,
+        location: z
+          .object({
+            postalCode: z.string().regex(/^\d{5}$/),
+            latitude: z.number().min(59).max(71),
+            longitude: z.number().min(19).max(32),
+          })
+          .optional()
+          .describe("A location from find_address. The user's home address: don't log it."),
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional()
+          .describe("Day whose pickup times give nextSlot with a location. Default today."),
+      },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
-    async ({ storeId }) =>
+    async ({ storeId, location, date }) =>
       run("get_delivery_options", async () => {
+        if (location) {
+          const api = requireDelivery();
+          const day = date ?? finnishDate(now());
+          // Either half is useful alone; fail only when both fail.
+          const [methodsResult, placesResult] = await Promise.allSettled([
+            api.getDeliveryMethods(location),
+            api.getPickupPlacesNear(location, day, 8),
+          ]);
+          if (methodsResult.status === "rejected" && placesResult.status === "rejected") throw placesResult.reason;
+          for (const r of [methodsResult, placesResult]) {
+            if (r.status === "rejected") log.warn("Part of the delivery options failed", { message: String(r.reason?.message ?? r.reason) });
+          }
+          const methods = methodsResult.status === "fulfilled" ? methodsResult.value : [];
+          const places = placesResult.status === "fulfilled" ? placesResult.value : [];
+          const options = places.map((p) => ({ ...p.area, distanceMeters: p.distanceMeters, freeTimesOnDate: p.slots.filter((x) => x.status === "available").length }));
+          return {
+            location: { postalCode: location.postalCode },
+            date: day,
+            selectedAreaId: selection.getDelivery()?.area.areaId ?? null,
+            methods,
+            options,
+            ...(methodsResult.status === "rejected" || placesResult.status === "rejected"
+              ? { partial: { methods: methodsResult.status === "rejected", pickupPlaces: placesResult.status === "rejected" } }
+              : {}),
+            siteOnlyMethods: methods.filter((m) => m.method !== "pickup" && m.available !== false).map((m) => m.method),
+          };
+        }
         const store = resolveStoreId(storeId);
         const known = selection.get()?.id === store ? selection.get() : seenStores.get(store);
         const name = known?.name ?? (await client.getStores([store])).get(store)?.name ?? null;
@@ -792,16 +877,35 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
         "Opens S-kaupat in a window of this server's own browser, where the user is already logged in, so they " +
         "can open their list, press 'Lisää kaikki ostoskoriin' and check out there. Call it when the user asks to " +
         "finish or check out, for example from a 'Go to checkout' button. Returns what to tell the user, " +
-        "including the pickup time to pick on the site when one was chosen. Never places an order.",
-      inputSchema: {},
+        "including the pickup time to pick on the site when one was chosen. A pickup time chosen with " +
+        "select_delivery is filled in on the site (prefilled true), so the user only checks it; the site still " +
+        "confirms it at checkout. Never places an order or reserves a time.",
+      inputSchema: {
+        applyChoice: z
+          .boolean()
+          .default(true)
+          .describe("Fill in the chosen pickup time on the site. false opens the site as it is."),
+      },
       annotations: { readOnlyHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async () =>
+    async ({ applyChoice }) =>
       run("open_site", async () => {
-        await requireSite().open(SITE_URL);
+        const site = requireSite();
         const store = selection.get();
         const delivery = store ? currentDelivery(store.id) : null;
-        return { opened: true, nextStep: listNextStep(store?.name ?? null, delivery) };
+        let prefilled = false;
+        if (applyChoice && store && delivery && delivery.area.method === "pickup") {
+          try {
+            const { entries } = await site.storage();
+            await site.writeStorage(prefillEntries(entries, sitePrefill(store, delivery)));
+            prefilled = true;
+          } catch (err) {
+            if (err instanceof SKaupatError && err.code === "login_in_progress") throw err;
+            log.warn("Could not fill in the pickup time on the site", { message: err instanceof Error ? err.message.split("\n")[0] : String(err) });
+          }
+        }
+        await site.open(SITE_URL);
+        return { opened: true, prefilled, nextStep: listNextStep(store?.name ?? null, delivery, prefilled) };
       }),
   );
 
@@ -835,6 +939,21 @@ export function createServer(client: SKaupatClient, auth: SKaupatAuth, options: 
   );
 
   return server;
+}
+
+function sitePrefill(store: SavedStore, d: SavedDelivery): SitePrefill {
+  return {
+    storeId: store.id,
+    storeName: store.name,
+    chain: store.chain,
+    areaId: d.area.areaId,
+    slotId: d.slot.slotId,
+    date: d.slot.date,
+    time: localTime(d.slot.start),
+    price: d.slot.price ?? d.area.price,
+    postalCode: d.area.address?.postalCode ?? null,
+    city: d.area.address?.city ?? null,
+  };
 }
 
 function basketDelivery(d: SavedDelivery | null): { date: string; slotId: string; areaId: string } | undefined {
@@ -915,7 +1034,14 @@ function categoryView(c: Category, depth: number): CategoryView {
  * store choice in the browser, so the first time it asks for a store and a delivery method before
  * the button works (seen live 2026-10-08).
  */
-function listNextStep(storeName: string | null, delivery: SavedDelivery | null) {
+function listNextStep(storeName: string | null, delivery: SavedDelivery | null, prefilled = false) {
+  if (delivery && prefilled) {
+    const pick = deliveryInstruction(delivery);
+    return {
+      fi: `Avaa ostoslista S-kaupat-sivulla ja paina "Lisää kaikki ostoskoriin". Valittu aika on valmiina sivulla; tarkista se. ${pick.fi} Tilaus vahvistetaan sivulla.`,
+      en: `Open the list on the S-kaupat site and press "Lisää kaikki ostoskoriin" (add all to cart). The chosen time is already filled in on the site; check it. ${pick.en} Then check out there.`,
+    };
+  }
   if (delivery) {
     const pick = deliveryInstruction(delivery);
     return {

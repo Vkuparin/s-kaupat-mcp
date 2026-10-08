@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "s-kaupat-mcp",
   "display_name": "S-kaupat",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "description": "Find S-kaupat stores, search groceries and fill your S-kaupat shopping lists.",
   "long_description": "Lets Claude use the S-kaupat.fi grocery store: choose your store (Prisma, S-market, Alepa, Sale and others) and a pickup time, search and browse products with current prices, read ingredients, allergens and nutrition, and fill your S-kaupat shopping lists. You finish on the S-kaupat site by pressing \"Lisää kaikki ostoskoriin\" on the list and checking out; this extension never places orders or touches payment.\n\nShopping lists need you to log in once to your S-kaupat account in a small window the extension opens (Microsoft Edge or Google Chrome must be installed). Only the login's renewal token is kept, in Windows Credential Manager on Windows.\n\nWhile Claude uses S-kaupat, a small Edge (or Chrome) window with the S-kaupat site runs minimised in the taskbar; the extension sends its requests from that page and closes the window after 3 idle minutes.\n\nUnofficial: not made or endorsed by S Group.",
   "author": {
@@ -44,12 +44,13 @@
     { "name": "add_to_shopping_list", "description": "Put products on a shopping list and report what was added." },
     { "name": "remove_from_shopping_list", "description": "Take products off a shopping list." },
     { "name": "delete_shopping_list", "description": "Delete a whole shopping list when the user asks." },
-    { "name": "get_delivery_options", "description": "Pickup options of the user's store, with the next free time." },
+    { "name": "find_address", "description": "Find the user's address for pickup or delivery." },
+    { "name": "get_delivery_options", "description": "Pickup places and delivery methods for a store or address, with the next free time." },
     { "name": "get_delivery_slots", "description": "Pickup times with fees for the coming days." },
     { "name": "select_delivery", "description": "Remember the pickup time the user picked." },
     { "name": "clear_delivery", "description": "Forget the chosen pickup time." },
     { "name": "check_basket", "description": "Check that a list's products can be ordered for the chosen time." },
-    { "name": "open_site", "description": "Open S-kaupat in the extension's own logged-in window to finish the order." },
+    { "name": "open_site", "description": "Open S-kaupat in the extension's own logged-in window, with the chosen pickup time filled in." },
     { "name": "get_site_choice", "description": "What store and pickup time the S-kaupat site itself has chosen." }
   ],
   "user_config": {

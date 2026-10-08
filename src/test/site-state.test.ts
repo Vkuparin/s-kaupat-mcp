@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readSiteChoice } from "../browser/site-state.js";
+import { prefillEntries, readSiteChoice } from "../browser/site-state.js";
 
 test("reads the site's choice and describes its storage without values", () => {
   const apollo = {
@@ -51,4 +51,39 @@ test("the site's choice is read from its storage keys as seen live", () => {
   assert.equal(choice.selectedAreaId, "a-1");
   assert.equal(choice.deliverySlotId, "2026-10-08:s-1");
   assert.equal(choice.deliveryMethod, "PICKUP");
+});
+
+test("pre-filling keeps the site's other fields and the same store's details", () => {
+  const entries: [string, string][] = [
+    ["store-storage", JSON.stringify({ state: { storeId: "726109200", deliveryStore: { __typename: "DeliveryStore", id: "726109200", areaId: "old", availablePaymentMethods: ["X"], name: "Prisma Herttoniemi", brand: "prisma" }, other: 1 }, version: 3 })],
+    ["delivery-storage", JSON.stringify({ state: { deliveryDetailsInfo: { additionalInfo: "ovikoodi", deliveryMethod: "HOME_DELIVERY" } }, version: 2 })],
+    ["delivery-state", JSON.stringify({ searchInput: "x", method: "HOME_DELIVERY", homeDeliveryType: "NORMAL" })],
+  ];
+  const out = new Map(
+    prefillEntries(entries, {
+      storeId: "726109200",
+      storeName: "Prisma Herttoniemi",
+      chain: "PRISMA",
+      areaId: "a-1",
+      slotId: "2026-10-09:s",
+      date: "2026-10-09",
+      time: "16:00",
+      price: 0,
+      postalCode: "00880",
+      city: "Helsinki",
+    }).map(([k, v]) => [k, JSON.parse(v)]),
+  );
+  const store = out.get("store-storage");
+  assert.equal(store.version, 3);
+  assert.equal(store.state.other, 1);
+  assert.deepEqual(store.state.deliveryStore.availablePaymentMethods, ["X"]);
+  assert.equal(store.state.deliveryStore.areaId, "a-1");
+  assert.equal(store.state.selectedBrand, "prisma");
+  const info = out.get("delivery-storage").state.deliveryDetailsInfo;
+  assert.equal(out.get("delivery-storage").version, 2);
+  assert.equal(info.additionalInfo, "ovikoodi");
+  assert.equal(info.deliveryMethod, "PICKUP");
+  assert.equal(info.deliverySlotPrice, 0);
+  assert.equal(out.get("delivery-state").searchInput, "x");
+  assert.equal(out.get("delivery-state").method, "PICKUP");
 });

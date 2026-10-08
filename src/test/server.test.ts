@@ -50,6 +50,7 @@ test("lists the catalogue, store, login and shopping list tools", async () => {
     "clear_delivery",
     "create_shopping_list",
     "delete_shopping_list",
+    "find_address",
     "get_delivery_options",
     "get_delivery_slots",
     "get_product_details",

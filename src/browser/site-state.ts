@@ -93,3 +93,83 @@ function parse(raw: string): unknown {
     return raw;
   }
 }
+
+/** The choice to write into the site's storage, so its own window opens with it. */
+export interface SitePrefill {
+  storeId: string;
+  storeName: string | null;
+  /** S-kaupat's chain code, e.g. "PRISMA" or "S_MARKET". */
+  chain: string | null;
+  areaId: string;
+  slotId: string;
+  /** YYYY-MM-DD, Finnish local date. */
+  date: string;
+  /** "12:00", Finnish local start time. */
+  time: string;
+  price: number | null;
+  postalCode: string | null;
+  city: string | null;
+}
+
+/**
+ * The storage entries that make the site show a pickup choice, merged into what it already has, in
+ * the layout seen live (2026-10-08, after choosing a pickup time anonymously on the site):
+ * store-storage and delivery-storage are { state, version } objects, delivery-state is plain.
+ * Fields the server does not know keep the site's own values. Pickup only: home delivery has
+ * address fields this server does not fill in.
+ */
+export function prefillEntries(entries: [string, string][], p: SitePrefill): [string, string][] {
+  const current = new Map(entries);
+  const persisted = (key: string): { state: Record<string, unknown>; version: number } => {
+    const value = parse(current.get(key) ?? "");
+    const obj = value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+    const state = obj.state && typeof obj.state === "object" ? (obj.state as Record<string, unknown>) : {};
+    return { ...obj, state: { ...state }, version: typeof obj.version === "number" ? obj.version : 0 };
+  };
+  const brand = p.chain ? p.chain.toLowerCase().replace(/_/g, "-") : null;
+
+  const store = persisted("store-storage");
+  const oldStore = (store.state.deliveryStore ?? {}) as Record<string, unknown>;
+  const sameStore = oldStore.id === p.storeId;
+  store.state.storeId = p.storeId;
+  if (brand) store.state.selectedBrand = brand;
+  store.state.deliveryStore = {
+    __typename: "DeliveryStore",
+    availablePaymentMethods: [],
+    ...(sameStore ? oldStore : {}),
+    id: p.storeId,
+    areaId: p.areaId,
+    ...(brand ? { brand } : {}),
+    ...(p.storeName ? { name: p.storeName } : {}),
+  };
+
+  const delivery = persisted("delivery-storage");
+  const oldInfo = (delivery.state.deliveryDetailsInfo ?? {}) as Record<string, unknown>;
+  delivery.state.selectedAreaId = p.areaId;
+  delivery.state.deliveryDetailsInfo = {
+    __typename: "DeliveryDetailsInfo",
+    additionalInfo: "",
+    address: "",
+    addressLine1: "",
+    addressLine2: null,
+    location: null,
+    ...oldInfo,
+    city: p.city ?? oldInfo.city ?? "",
+    postalCode: p.postalCode ?? oldInfo.postalCode ?? "",
+    deliveryDate: p.date,
+    deliveryMethod: "PICKUP",
+    deliverySlotId: p.slotId,
+    deliverySlotPrice: p.price ?? 0,
+    deliveryTime: p.time,
+  };
+
+  const stateValue = parse(current.get("delivery-state") ?? "");
+  const state = stateValue && typeof stateValue === "object" && !Array.isArray(stateValue) ? (stateValue as Record<string, unknown>) : {};
+  const method = { ...state, method: "PICKUP", homeDeliveryType: state.homeDeliveryType ?? "NORMAL" };
+
+  return [
+    ["store-storage", JSON.stringify(store)],
+    ["delivery-storage", JSON.stringify(delivery)],
+    ["delivery-state", JSON.stringify(method)],
+  ];
+}

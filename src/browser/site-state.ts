@@ -10,6 +10,9 @@
 
 /** Client-state fields the site's own queries name (site-operations.graphql), all ids, dates or codes. */
 const CHOICE_FIELDS = [
+  // Seen live (2026-10-08): store-storage.state.storeId, delivery-storage.state.selectedAreaId and
+  // .deliveryDetailsInfo.{deliveryDate, deliveryMethod, deliverySlotId}; delivery-state.method.
+  "storeId",
   "selectedStoreId",
   "currentStoreId",
   "selectedAreaId",

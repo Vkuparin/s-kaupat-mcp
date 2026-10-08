@@ -52,7 +52,10 @@ export interface DeliveryArea {
   address: { street: string | null; postalCode: string | null; city: string | null } | null;
   /** Whether alcohol can be ordered here. Null = unknown. */
   alcoholAllowed: boolean | null;
-  /** The next free slot, so an app can show "next: tomorrow 10–12" without the calendar. */
+  /**
+   * The next free slot, so an app can show "next: tomorrow 10–12" without the calendar. S-kaupat
+   * reports only its start and price here, so end and closesAt are null: it may be about to close.
+   */
   nextSlot: DeliverySlot | null;
 }
 

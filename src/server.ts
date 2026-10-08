@@ -14,7 +14,7 @@ import type { DeliveryApi, DeliverySlot, SavedDelivery } from "./delivery/types.
 import { readSiteChoice } from "./browser/site-state.js";
 
 export const SERVER_NAME = "s-kaupat";
-export const SERVER_VERSION = "0.6.1";
+export const SERVER_VERSION = "0.6.2";
 /** Bumped when tool inputs or result shapes change incompatibly. */
 export const SCHEMA_VERSION = "0.3";
 

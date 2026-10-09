@@ -82,7 +82,9 @@ Each setting comes from, highest first: a command-line flag, an environment vari
 | Config file key | Environment variable | Flag | Default | Meaning |
 |---|---|---|---|---|
 | `mode` | `SKAUPAT_MODE` | `--demo` | `live` | `live` or `demo` (built-in sample stores and products, no network, login always succeeds). `SKAUPAT_DEMO=true` also means demo |
-| `transport` | `SKAUPAT_TRANSPORT` | `--transport` | `browser` | `browser` sends S-kaupat calls from the server's own browser window; `direct` uses plain HTTP, which S-kaupat currently refuses |
+| `transport` | `SKAUPAT_TRANSPORT` | `--transport` | `browser` | `browser` sends S-kaupat calls from the server's own browser window; `host` sends them from a page your app keeps signed in ([host-page.md](host-page.md), since 1.3.0); `direct` uses plain HTTP, which S-kaupat currently refuses |
+| `hostUrl` | `SKAUPAT_HOST_URL` | `--host-url` | none | With `host`: the local address of your app's page endpoint, `http://127.0.0.1:<port>/...` |
+| `hostKey` | `SKAUPAT_HOST_KEY` | | none | With `host`: the key sent as `Authorization: Bearer <key>`, at least 24 characters. Environment or config file only |
 | `dataDir` | `SKAUPAT_DATA_DIR` | `--data-dir` | `%LOCALAPPDATA%\s-kaupat-mcp` | Browser profile, lock files and the login file. Give your app its own folder |
 | `settingsFile` | `SKAUPAT_SETTINGS_FILE` | | `<dataDir>\settings.json` when `dataDir` is set, else `%APPDATA%\s-kaupat-mcp\settings.json`; `demo-settings.json` next to it in demo mode | The user's chosen store and time |
 | `tokenStore` | `SKAUPAT_TOKEN_STORE` | | `credential-manager` on Windows, `file` elsewhere | Where the login (refresh token) is kept |
@@ -107,6 +109,10 @@ Example `config.json`:
 ```
 
 With `tokenStore: "credential-manager"` the login is saved in Windows Credential Manager under one shared name, so every app on the PC that uses this server shares the user's S-kaupat login. The S-kaupat site keeps its own login in the browser profile inside `dataDir`, though, and only the login window puts it there. An app with its own `dataDir` that finds a login saved by another app can therefore search and write lists while the window `open_site` shows is signed out. Set `loginScope: "data-dir"` to keep a login of its own for your `dataDir` in Credential Manager: the user logs in once in your app, and the site window is signed in whenever the server is. `tokenStore: "file"` with your own `dataDir` also keeps a login per app, outside Credential Manager.
+
+## Or let your app keep the S-kaupat page
+
+If your app already shows S-kaupat itself (for example in an Electron `WebContentsView`), the server does not need a browser window of its own. With `--transport host` it sends its calls from your app's page and uses the login the user made there, so the user signs in once and the page and the server are always the same account. Your app answers a small fixed set of local requests; see [host-page.md](host-page.md).
 
 ## What the user's PC needs
 

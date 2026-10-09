@@ -11,8 +11,16 @@ import { dirname, join, resolve } from "node:path";
 export interface SKaupatConfig {
   /** live: real S-kaupat. demo: built-in sample stores and products, no network, no account. */
   mode: "live" | "demo";
-  /** browser: calls go from the server's own Edge/Chrome window (S-kaupat answers only its site). direct: plain HTTP. */
-  transport: "browser" | "direct";
+  /**
+   * browser: calls go from the server's own Edge/Chrome window (S-kaupat answers only its site).
+   * direct: plain HTTP. host: calls go from a signed-in S-kaupat page the host app keeps, reached
+   * over the local protocol in docs/host-page.md (needs hostUrl and hostKey).
+   */
+  transport: "browser" | "direct" | "host";
+  /** Base address of the host app's S-kaupat page endpoint, with the host transport. Loopback only. */
+  hostUrl: string | null;
+  /** Key sent as "Authorization: Bearer <key>" to the host endpoint. Not a flag, so it stays out of process lists. */
+  hostKey: string | null;
   /** Where the server keeps its browser profile, lock files and (if file-based) the login. */
   dataDir: string;
   /** The user's chosen store. */
@@ -65,6 +73,8 @@ export const ENV = {
   httpPort: "SKAUPAT_HTTP_PORT",
   httpHost: "SKAUPAT_HTTP_HOST",
   accessKey: "SKAUPAT_ACCESS_KEY",
+  hostUrl: "SKAUPAT_HOST_URL",
+  hostKey: "SKAUPAT_HOST_KEY",
   ordering: "SKAUPAT_ORDERING",
 } as const;
 
@@ -106,6 +116,8 @@ export function loadConfig(options: LoadConfigOptions = {}): { config: SKaupatCo
   const config: SKaupatConfig = {
     mode: merged.mode ?? "live",
     transport: merged.transport ?? "browser",
+    hostUrl: merged.hostUrl ?? null,
+    hostKey: merged.hostKey ?? null,
     dataDir,
     // With a data folder of its own, an app keeps everything in it; otherwise the store choice stays
     // where earlier versions saved it.
@@ -139,7 +151,29 @@ export function loadConfig(options: LoadConfigOptions = {}): { config: SKaupatCo
       throw new ConfigError(`The access key must be at least ${MIN_ACCESS_KEY_LENGTH} characters.`);
     }
   }
+  if (config.transport === "host" && config.mode === "live") {
+    if (!config.hostUrl || !config.hostKey) {
+      throw new ConfigError(
+        `The host transport needs ${ENV.hostUrl} (or --host-url) and ${ENV.hostKey} (or "hostKey" in the config file).`,
+      );
+    }
+    if (config.hostKey.length < MIN_ACCESS_KEY_LENGTH) {
+      throw new ConfigError(`The host key must be at least ${MIN_ACCESS_KEY_LENGTH} characters.`);
+    }
+    if (!isLoopbackHttp(config.hostUrl)) {
+      throw new ConfigError("The host address must be http://127.0.0.1, http://localhost or http://[::1] with a port: the key and the login never leave this PC.");
+    }
+  }
   return { config, cli };
+}
+
+function isLoopbackHttp(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) && url.port !== "";
+  } catch {
+    return false;
+  }
 }
 
 function envValues(env: Env): Partial_ {
@@ -159,6 +193,8 @@ function envValues(env: Env): Partial_ {
   if (env[ENV.httpPort]) out.httpPort = parsePort(env[ENV.httpPort]!, ENV.httpPort);
   if (env[ENV.httpHost]) out.httpHost = env[ENV.httpHost]!;
   if (env[ENV.accessKey]) out.accessKey = env[ENV.accessKey]!;
+  if (env[ENV.hostUrl]) out.hostUrl = env[ENV.hostUrl]!;
+  if (env[ENV.hostKey]) out.hostKey = env[ENV.hostKey]!;
   if (env[ENV.ordering]) out.ordering = !["0", "false", "off"].includes(env[ENV.ordering]!.toLowerCase());
   return out;
 }
@@ -201,6 +237,8 @@ function readConfigFile(path: string): Partial_ {
       case "dataDir":
       case "httpHost":
       case "accessKey":
+      case "hostUrl":
+      case "hostKey":
       case "settingsFile":
       case "tokenFile":
       case "browserPath":
@@ -224,7 +262,9 @@ Options:
   --config <file>     JSON config file (or ${ENV.config})
   --demo              Built-in sample data, no network or account (or ${ENV.mode}=demo)
   --data-dir <dir>    Folder for the browser profile and login (or ${ENV.dataDir})
-  --transport <name>  browser (default) or direct (or ${ENV.transport})
+  --transport <name>  browser (default), direct or host (or ${ENV.transport})
+  --host-url <url>    With --transport host: the host app's local S-kaupat page endpoint
+                      (needs ${ENV.hostKey}; or ${ENV.hostUrl}). See docs/host-page.md
   --http-port <port>  Serve MCP over HTTP at http://127.0.0.1:<port>/mcp instead of stdio
                       (needs ${ENV.accessKey}; or ${ENV.httpPort})
   --http-host <addr>  Address to listen on (default 127.0.0.1)
@@ -262,6 +302,9 @@ function parseArgs(argv: string[]): { values: Partial_; cli: CliOptions; configF
         break;
       case "--transport":
         values.transport = parseTransport(next(), name);
+        break;
+      case "--host-url":
+        values.hostUrl = next();
         break;
       case "--debug":
         values.debug = true;
@@ -301,8 +344,8 @@ function parseMode(value: string, where: string): SKaupatConfig["mode"] {
 }
 
 function parseTransport(value: string, where: string): SKaupatConfig["transport"] {
-  if (value === "browser" || value === "direct") return value;
-  throw new ConfigError(`${where} must be "browser" or "direct", not "${value}".`);
+  if (value === "browser" || value === "direct" || value === "host") return value;
+  throw new ConfigError(`${where} must be "browser", "direct" or "host", not "${value}".`);
 }
 
 function parseLoginScope(value: string, where: string): SKaupatConfig["loginScope"] {

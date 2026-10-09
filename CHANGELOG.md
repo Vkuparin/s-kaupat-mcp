@@ -2,6 +2,10 @@
 
 The server follows [semantic versioning](https://semver.org/) from 1.0.0. What counts as a breaking change is in [docs/embedding.md](docs/embedding.md#versions).
 
+## 1.3.0
+
+- New transport `host` (`SKAUPAT_TRANSPORT=host`, with `SKAUPAT_HOST_URL` and `SKAUPAT_HOST_KEY`): for an app that keeps an S-kaupat page signed in itself, for example a view in its own window. The server runs no browser. It sends its S-kaupat calls from the app's page and takes the login from that page's storage, so the user signs in once, in the app. The app answers five fixed requests on a local address (send one request from the page, read its storage, reload it, show a page, forget the session); the protocol is in [docs/host-page.md](docs/host-page.md). The server never refreshes the login itself, because S-kaupat may rotate the refresh token and that would sign the app's page out: when the access token is missing or about to expire it asks the app to reload the page and waits for the site to renew it. `start_login`, `login_status`, `log_out`, `open_site` and `get_site_choice` work on it; `open_site` shows the page in the app and does not fill in the pickup time. The default stays the `browser` transport.
+
 ## 1.2.0
 
 - New setting `loginScope` (`SKAUPAT_LOGIN_SCOPE`). `data-dir` keeps the Credential Manager login for this data folder only, so it always matches the site's own login in the browser profile there. With the shared default, an app with a new data folder could find another app's login, search and write lists, yet open a signed-out S-kaupat window from `open_site`. The default stays `shared`.

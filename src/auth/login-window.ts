@@ -1,5 +1,8 @@
 import { launchProfile } from "../browser/launch.js";
 import { log } from "../log.js";
+import { findLogin, type CapturedLogin } from "./find-login.js";
+
+export { findLogin, type CapturedLogin };
 
 /**
  * The server's own small S-kaupat login window. It runs in a browser profile
@@ -14,11 +17,6 @@ import { log } from "../log.js";
  * the site's login button lives. The token search below is deliberately
  * shape-agnostic: it looks for any object with a non-empty `refreshToken`.
  */
-
-export interface CapturedLogin {
-  refreshToken: string;
-  accessToken: string | null;
-}
 
 export type LoginWindowResult =
   | { status: "logged_in"; login: CapturedLogin }
@@ -91,42 +89,5 @@ export class BrowserLoginWindow implements LoginWindow {
       unavailableCode: "login_window_unavailable",
       busyCode: "browser_busy",
     });
-  }
-}
-
-/** Looks through localStorage entries for an object holding a non-empty refreshToken. */
-export function findLogin(entries: [string, string][]): CapturedLogin | null {
-  for (const [, value] of entries) {
-    const found = search(parseJson(value), 0);
-    if (found) return found;
-  }
-  return null;
-}
-
-function search(node: unknown, depth: number): CapturedLogin | null {
-  if (depth > 8 || node === null || typeof node !== "object") {
-    // Some stores keep JSON encoded inside a string value.
-    if (typeof node === "string" && depth <= 8 && /^[[{]/.test(node)) return search(parseJson(node), depth + 1);
-    return null;
-  }
-  const record = node as Record<string, unknown>;
-  if (typeof record.refreshToken === "string" && record.refreshToken) {
-    return {
-      refreshToken: record.refreshToken,
-      accessToken: typeof record.accessToken === "string" && record.accessToken ? record.accessToken : null,
-    };
-  }
-  for (const child of Object.values(record)) {
-    const found = search(child, depth + 1);
-    if (found) return found;
-  }
-  return null;
-}
-
-function parseJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
   }
 }

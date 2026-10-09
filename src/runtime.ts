@@ -4,6 +4,9 @@ import { HttpAuthApi } from "./auth/auth-api.js";
 import { FixtureAuth } from "./auth/fixture-auth.js";
 import { forgetSiteSession } from "./browser/forget-session.js";
 import { BrowserLoginWindow } from "./auth/login-window.js";
+import { HostAuth } from "./auth/host-auth.js";
+import { HostPage } from "./host/host-page.js";
+import { SKaupatError } from "./errors.js";
 import { LiveAuth } from "./auth/session.js";
 import { createTokenStore } from "./auth/token-store.js";
 import type { SKaupatAuth } from "./auth/types.js";
@@ -40,18 +43,27 @@ export interface SKaupatRuntime {
 export function createRuntime(config: SKaupatConfig): SKaupatRuntime {
   setDebugLogging(config.debug);
   const selection: StoreSelection = new FileStoreSelection(config.settingsFile);
-  const { client, auth, browser, checkout } = config.mode === "demo" ? demoParts(config) : liveParts(config);
+  const { client, auth, browser, hostPage, checkout } = config.mode === "demo" ? demoParts(config) : liveParts(config);
   // Demo orders live only in memory (DemoCheckout), so their tokens must not outlive the process either.
   const orders = config.mode === "demo" ? new MemoryOrderStore() : new FileOrderStore(join(config.dataDir, "orders.json"));
   // One for the whole runtime: over local HTTP each request gets a new MCP server.
   const reviews = new OrderReviews();
-  const site: SiteWindow | undefined = browser
+  const site: SiteWindow | undefined = hostPage
     ? {
-        open: (url) => browser.openForUser(url),
-        storage: () => browser.siteStorage(),
-        writeStorage: (entries) => browser.writeSiteStorage(entries),
+        open: (url) => hostPage.open(url),
+        storage: () => hostPage.storage(),
+        // The site's choice lives in the host's page, which the host app owns.
+        writeStorage: async () => {
+          throw new SKaupatError("unsupported", "The app's S-kaupat page cannot be filled in by the server.");
+        },
       }
-    : undefined;
+    : browser
+      ? {
+          open: (url) => browser.openForUser(url),
+          storage: () => browser.siteStorage(),
+          writeStorage: (entries) => browser.writeSiteStorage(entries),
+        }
+      : undefined;
   return {
     config,
     createMcpServer: () =>
@@ -76,16 +88,19 @@ interface Parts {
   client: SKaupatClient & ShoppingListApi & DeliveryApi;
   auth: SKaupatAuth;
   browser: BrowserSession | null;
+  /** The host app's page, with the host transport. */
+  hostPage: HostPage | null;
   checkout: CheckoutApi;
 }
 
 function demoParts(config: SKaupatConfig): Parts {
   log.info("Demo mode: built-in sample data, no network", config.demoCatalogueFile ? { catalogue: config.demoCatalogueFile } : undefined);
   const client = config.demoCatalogueFile ? new FixtureSKaupatClient(config.demoCatalogueFile) : new FixtureSKaupatClient();
-  return { client, auth: new FixtureAuth(), browser: null, checkout: new DemoCheckout() };
+  return { client, auth: new FixtureAuth(), browser: null, hostPage: null, checkout: new DemoCheckout() };
 }
 
 function liveParts(config: SKaupatConfig): Parts {
+  if (config.transport === "host") return hostParts(config);
   // One browser profile for the login window and the API session, so they share the S-kaupat session.
   const profileDir = join(config.dataDir, "login-browser");
   const executablePath = config.browserPath ?? undefined;
@@ -111,5 +126,15 @@ function liveParts(config: SKaupatConfig): Parts {
     },
   });
   const client = new HttpSKaupatClient({ fetchImpl });
-  return { client, auth, browser, checkout: new HttpCheckoutApi(client) };
+  return { client, auth, browser, hostPage: null, checkout: new HttpCheckoutApi(client) };
+}
+
+/** The host transport: calls and the login both come from the S-kaupat page the host app keeps. */
+function hostParts(config: SKaupatConfig): Parts {
+  const hostPage = new HostPage({ url: config.hostUrl!, key: config.hostKey! });
+  const fetchImpl = createBrowserFetch({ page: async () => hostPage.apiPage() });
+  log.info("S-kaupat transport", { transport: "host" });
+  const auth = new HostAuth({ page: hostPage, api: new HttpAuthApi({ fetchImpl }), loginUrl: config.loginUrl ?? undefined });
+  const client = new HttpSKaupatClient({ fetchImpl });
+  return { client, auth, browser: null, hostPage, checkout: new HttpCheckoutApi(client) };
 }

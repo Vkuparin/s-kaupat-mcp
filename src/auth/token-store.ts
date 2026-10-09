@@ -1,4 +1,4 @@
-import { defaultDataDir } from "../config.js";
+import { DEFAULT_CREDENTIAL_TARGET, defaultDataDir } from "../config.js";
 import { execFile } from "node:child_process";
 import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -153,13 +153,20 @@ function powershell(script: string, stdin: string): Promise<string> {
 }
 
 /** The login store a config names; the lock path is where processes sharing it coordinate renewal. */
-export function createTokenStore(config: Pick<SKaupatConfig, "tokenStore" | "tokenFile" | "dataDir">): {
+export function createTokenStore(
+  config: Pick<SKaupatConfig, "tokenStore" | "tokenFile" | "dataDir" | "credentialTarget">,
+): {
   store: TokenStore;
   lockPath: string;
 } {
   if (config.tokenStore === "credential-manager") {
-    // The credential is one per Windows user, whatever data folder an app uses, so the lock must be too.
-    return { store: new WindowsCredentialStore(), lockPath: join(defaultDataDir(), "refresh.lock") };
+    // The default entry is shared by every process without a data folder of its own, so its lock is
+    // too; an app's own entry belongs to its data folder.
+    const shared = config.credentialTarget === DEFAULT_CREDENTIAL_TARGET;
+    return {
+      store: new WindowsCredentialStore(config.credentialTarget),
+      lockPath: join(shared ? defaultDataDir() : config.dataDir, "refresh.lock"),
+    };
   }
   return { store: new FileTokenStore(config.tokenFile), lockPath: `${config.tokenFile}.lock` };
 }

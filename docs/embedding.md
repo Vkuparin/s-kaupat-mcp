@@ -87,6 +87,7 @@ Each setting comes from, highest first: a command-line flag, an environment vari
 | `settingsFile` | `SKAUPAT_SETTINGS_FILE` | | `<dataDir>\settings.json` when `dataDir` is set, else `%APPDATA%\s-kaupat-mcp\settings.json`; `demo-settings.json` next to it in demo mode | The user's chosen store and time |
 | `tokenStore` | `SKAUPAT_TOKEN_STORE` | | `credential-manager` on Windows, `file` elsewhere | Where the login (refresh token) is kept |
 | `tokenFile` | `SKAUPAT_TOKEN_FILE` | | `<dataDir>\refresh-token` | Login file when `tokenStore` is `file` |
+| `loginScope` | `SKAUPAT_LOGIN_SCOPE` | | `shared` | `data-dir` keeps a Credential Manager login of its own for this `dataDir` (since 1.2.0) |
 | `browserPath` | `SKAUPAT_BROWSER_PATH` | | Edge, then Chrome | A Chromium-based browser to use instead |
 | `loginUrl` | `SKAUPAT_LOGIN_URL` | | `https://www.s-kaupat.fi/` | Page the login window opens |
 | `demoCatalogueFile` | `SKAUPAT_FIXTURES` | | built in | A JSON catalogue for demo mode |
@@ -105,7 +106,7 @@ Example `config.json`:
 }
 ```
 
-With `tokenStore: "credential-manager"` the login is saved in Windows Credential Manager under one shared name, so every app on the PC that uses this server shares the user's S-kaupat login. Use `tokenStore: "file"` with your own `dataDir` to keep a login per app.
+With `tokenStore: "credential-manager"` the login is saved in Windows Credential Manager under one shared name, so every app on the PC that uses this server shares the user's S-kaupat login. The S-kaupat site keeps its own login in the browser profile inside `dataDir`, though, and only the login window puts it there. An app with its own `dataDir` that finds a login saved by another app can therefore search and write lists while the window `open_site` shows is signed out. Set `loginScope: "data-dir"` to keep a login of its own for your `dataDir` in Credential Manager: the user logs in once in your app, and the site window is signed in whenever the server is. `tokenStore: "file"` with your own `dataDir` also keeps a login per app, outside Credential Manager.
 
 ## What the user's PC needs
 

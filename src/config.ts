@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -20,6 +21,14 @@ export interface SKaupatConfig {
   tokenStore: "credential-manager" | "file";
   /** Login file when tokenStore is file. */
   tokenFile: string;
+  /**
+   * shared: one login for every app on the PC (the default). data-dir: a login of its own for this
+   * data folder, which always matches the site's login in the browser profile there, so the window
+   * open_site shows is signed in whenever the server is.
+   */
+  loginScope: "shared" | "data-dir";
+  /** Credential Manager entry when tokenStore is credential-manager; follows loginScope. */
+  credentialTarget: string;
   /** A Chromium-based browser to use instead of the installed Edge or Chrome. */
   browserPath: string | null;
   /** Page the login window opens. */
@@ -48,6 +57,7 @@ export const ENV = {
   settingsFile: "SKAUPAT_SETTINGS_FILE",
   tokenStore: "SKAUPAT_TOKEN_STORE",
   tokenFile: "SKAUPAT_TOKEN_FILE",
+  loginScope: "SKAUPAT_LOGIN_SCOPE",
   browserPath: "SKAUPAT_BROWSER_PATH",
   loginUrl: "SKAUPAT_LOGIN_URL",
   demoCatalogueFile: "SKAUPAT_FIXTURES",
@@ -106,6 +116,9 @@ export function loadConfig(options: LoadConfigOptions = {}): { config: SKaupatCo
     ),
     tokenStore,
     tokenFile: resolve(merged.tokenFile ?? join(dataDir, "refresh-token")),
+    loginScope: merged.loginScope ?? "shared",
+    credentialTarget:
+      merged.loginScope === "data-dir" ? credentialTargetFor(dataDir, platform) : DEFAULT_CREDENTIAL_TARGET,
     browserPath: merged.browserPath ?? null,
     loginUrl: merged.loginUrl ?? null,
     demoCatalogueFile: merged.demoCatalogueFile ?? null,
@@ -138,6 +151,7 @@ function envValues(env: Env): Partial_ {
   if (env[ENV.settingsFile]) out.settingsFile = env[ENV.settingsFile];
   if (env[ENV.tokenStore]) out.tokenStore = parseTokenStore(env[ENV.tokenStore]!, ENV.tokenStore);
   if (env[ENV.tokenFile]) out.tokenFile = env[ENV.tokenFile];
+  if (env[ENV.loginScope]) out.loginScope = parseLoginScope(env[ENV.loginScope]!, ENV.loginScope);
   if (env[ENV.browserPath]) out.browserPath = env[ENV.browserPath]!;
   if (env[ENV.loginUrl]) out.loginUrl = env[ENV.loginUrl]!;
   if (env[ENV.demoCatalogueFile]) out.demoCatalogueFile = env[ENV.demoCatalogueFile]!;
@@ -169,6 +183,9 @@ function readConfigFile(path: string): Partial_ {
         break;
       case "tokenStore":
         out.tokenStore = parseTokenStore(String(value), where(key));
+        break;
+      case "loginScope":
+        out.loginScope = parseLoginScope(String(value), where(key));
         break;
       case "debug":
         if (typeof value !== "boolean") throw new ConfigError(`${where(key)} must be true or false.`);
@@ -288,12 +305,27 @@ function parseTransport(value: string, where: string): SKaupatConfig["transport"
   throw new ConfigError(`${where} must be "browser" or "direct", not "${value}".`);
 }
 
+function parseLoginScope(value: string, where: string): SKaupatConfig["loginScope"] {
+  if (value === "shared" || value === "data-dir") return value;
+  throw new ConfigError(`${where} must be "shared" or "data-dir", not "${value}".`);
+}
+
 function parseTokenStore(value: string, where: string): SKaupatConfig["tokenStore"] {
   if (value === "credential-manager" || value === "file") return value;
   throw new ConfigError(`${where} must be "credential-manager" or "file", not "${value}".`);
 }
 
 /** %LOCALAPPDATA%\s-kaupat-mcp on Windows, ~/.config/s-kaupat-mcp elsewhere. */
+export const DEFAULT_CREDENTIAL_TARGET = "s-kaupat-mcp/refresh-token";
+/**
+ * The site keeps its own login in the browser profile under the data folder. With a login shared by
+ * every data folder, a new folder's site window is signed out while API calls still work.
+ */
+export function credentialTargetFor(dataDir: string, platform: NodeJS.Platform = process.platform): string {
+  const path = platform === "win32" ? resolve(dataDir).toLowerCase() : resolve(dataDir);
+  return `${DEFAULT_CREDENTIAL_TARGET}/${createHash("sha256").update(path).digest("hex").slice(0, 16)}`;
+}
+
 export function defaultDataDir(env: Env = process.env, platform: NodeJS.Platform = process.platform): string {
   if (platform === "win32") return join(env.LOCALAPPDATA ?? join(homedir(), "AppData", "Local"), "s-kaupat-mcp");
   return join(env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "s-kaupat-mcp");

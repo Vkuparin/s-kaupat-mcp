@@ -14,6 +14,7 @@ test("defaults keep earlier versions' locations, so an update finds the saved st
   assert.equal(config.tokenStore, "credential-manager");
   assert.equal(config.dataDir, resolve(join("C:\\L", "s-kaupat-mcp")));
   assert.equal(config.settingsFile, resolve(join("C:\\R", "s-kaupat-mcp", "settings.json")));
+  assert.equal(config.credentialTarget, "s-kaupat-mcp/refresh-token");
   assert.equal(loadConfig({ env: {}, platform: "linux" }).config.tokenStore, "file");
 });
 
@@ -22,6 +23,25 @@ test("an app's own data folder holds everything", () => {
   const { config } = loadConfig({ env: { SKAUPAT_DATA_DIR: dir }, platform: "win32" });
   assert.equal(config.settingsFile, join(dir, "settings.json"));
   assert.equal(config.tokenFile, join(dir, "refresh-token"));
+  // Shared by default: every app on the PC sees the same S-kaupat login.
+  assert.equal(config.loginScope, "shared");
+  assert.equal(config.credentialTarget, "s-kaupat-mcp/refresh-token");
+});
+
+test("a data-dir login scope keeps the login with the folder's browser profile", () => {
+  const dir = tmp();
+  const scoped = (env: Record<string, string>, argv: string[] = []) =>
+    loadConfig({ env: { SKAUPAT_LOGIN_SCOPE: "data-dir", ...env }, argv, platform: "win32" }).config;
+  const config = scoped({ SKAUPAT_DATA_DIR: dir });
+  assert.equal(config.loginScope, "data-dir");
+  assert.match(config.credentialTarget, /^s-kaupat-mcp\/refresh-token\/[0-9a-f]{16}$/);
+  assert.notEqual(scoped({ SKAUPAT_DATA_DIR: tmp() }).credentialTarget, config.credentialTarget);
+  // Windows paths ignore case.
+  assert.equal(scoped({}, ["--data-dir", dir.toUpperCase()]).credentialTarget, config.credentialTarget);
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ loginScope: "data-dir", dataDir: dir }));
+  assert.equal(loadConfig({ env: { SKAUPAT_CONFIG: file }, platform: "win32" }).config.credentialTarget, config.credentialTarget);
+  assert.throws(() => scoped({ SKAUPAT_LOGIN_SCOPE: "per-app" }), ConfigError);
 });
 
 test("flags beat environment variables, which beat the config file", () => {

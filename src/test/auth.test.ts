@@ -7,7 +7,7 @@ import { accountIdFor, HttpAuthApi, type AuthApi, type AuthTokens, type UserProf
 import { withFileLock } from "../auth/file-lock.js";
 import { findLogin, type LoginWindow, type LoginWindowResult } from "../auth/login-window.js";
 import { jwtExpiry, LiveAuth } from "../auth/session.js";
-import { FileTokenStore, WindowsCredentialStore } from "../auth/token-store.js";
+import { createTokenStore, FileTokenStore, WindowsCredentialStore } from "../auth/token-store.js";
 import { SKaupatError } from "../errors.js";
 
 function jwt(expSeconds: number, extra: Record<string, unknown> = {}): string {
@@ -330,4 +330,13 @@ test("logging out clears the account ID", async () => {
   assert.equal((await auth.status()).accountId, accountIdFor("12345"));
   await auth.logout();
   assert.deepEqual(await auth.status(), { status: "logged_out", displayName: null, accountId: null });
+});
+
+test("a data-dir login keeps its Credential Manager entry and renewal lock with the data folder", () => {
+  const dataDir = join(tmpdir(), "skaupat-app");
+  const own = createTokenStore({ tokenStore: "credential-manager", tokenFile: "", dataDir, credentialTarget: "s-kaupat-mcp/refresh-token/0123456789abcdef" });
+  assert.match(own.store.description, /s-kaupat-mcp\/refresh-token\/0123456789abcdef/);
+  assert.equal(own.lockPath, join(dataDir, "refresh.lock"));
+  const shared = createTokenStore({ tokenStore: "credential-manager", tokenFile: "", dataDir, credentialTarget: "s-kaupat-mcp/refresh-token" });
+  assert.notEqual(shared.lockPath, join(dataDir, "refresh.lock"));
 });

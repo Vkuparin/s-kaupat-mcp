@@ -2,6 +2,10 @@
 
 The server follows [semantic versioning](https://semver.org/) from 1.0.0. What counts as a breaking change is in [docs/embedding.md](docs/embedding.md#versions).
 
+## Unreleased
+
+- New setting `loginScope` (`SKAUPAT_LOGIN_SCOPE`). `data-dir` keeps the Credential Manager login for this data folder only, so it always matches the site's own login in the browser profile there. With the shared default, an app with a new data folder could find another app's login, search and write lists, yet open a signed-out S-kaupat window from `open_site`. The default stays `shared`.
+
 ## 1.1.0
 
 - `login_status`, `start_login` and `get_setup_status` give `accountId` when logged in: a stable ID for the S-kaupat account, the same on any device and across logins, so apps can keep their own data per account and notice an account switch. It is a one-way hash of S-kaupat's user ID, which is never returned.

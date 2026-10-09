@@ -2,7 +2,7 @@
 
 The server follows [semantic versioning](https://semver.org/) from 1.0.0. What counts as a breaking change is in [docs/embedding.md](docs/embedding.md#versions).
 
-## Unreleased
+## 1.2.0
 
 - New setting `loginScope` (`SKAUPAT_LOGIN_SCOPE`). `data-dir` keeps the Credential Manager login for this data folder only, so it always matches the site's own login in the browser profile there. With the shared default, an app with a new data folder could find another app's login, search and write lists, yet open a signed-out S-kaupat window from `open_site`. The default stays `shared`.
 

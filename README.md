@@ -2,7 +2,7 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets any MCP client (an app, an assistant, Claude) use the [S-kaupat.fi](https://www.s-kaupat.fi) grocery store: find stores, search and browse products, read ingredients and allergens, and fill the user's S-kaupat shopping lists, choose a pickup or delivery time, and place the order from the app, with card payment on the payment provider's page.
 
-Status: **stable (v1.0.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
+Status: **stable (v1.3.0)**. Catalogue, store-selection, login, shopping list, pickup and delivery time, and in-app checkout tools. All tools talk to S-kaupat's public API with their own queries, see [Live mode](#live-mode). Since 1.0.0: `accountId` for logged-in tools (1.1.0), a per-data-folder `loginScope` (1.2.0), and the `host` transport for apps that keep the S-kaupat page signed in themselves (1.3.0). The roadmap is in [docs/s-kaupat-mcp-plan.md](docs/s-kaupat-mcp-plan.md) and what is known about the S-kaupat API is in [docs/s-kaupat-api.md](docs/s-kaupat-api.md).
 
 ## Get it
 
@@ -15,7 +15,7 @@ All of these are built by the Release workflow in GitHub Actions.
 
 | Tool | Input | Returns |
 |---|---|---|
-| `get_setup_status` | none | For an app's first screen: `mode` (`live` or `demo`), the chosen store, login status, `canSearch`, `canUseLists`, and the chosen pickup time (`delivery`) and `nextStep` (`choose_store`, `log_in`, `choose_delivery` or `null`). Never opens a window |
+| `get_setup_status` | none | For an app's first screen: `mode` (`live` or `demo`), the chosen store, the login with its `accountId` when logged in, `canSearch`, `canUseLists`, and the chosen pickup time (`delivery`) and `nextStep` (`choose_store`, `log_in`, `choose_delivery` or `null`). Never opens a window |
 | `search_stores` | `query` (name, city or postal code), `chain`, `limit`, `includeOpeningHours` | Picker-ready stores: ID, name, chain, address, coordinates, online ordering, today's opening hours, whether it is the selected store |
 | `select_store` | `storeId` | Saves the user's store and returns it with opening hours for the coming week |
 | `get_selected_store` | none | The saved store with opening hours, or `selectedStore: null` when none is chosen yet |
@@ -39,7 +39,7 @@ All of these are built by the Release workflow in GitHub Actions.
 | `select_delivery` | `areaId`, `slotId` | Saves the chosen time after checking it is still free; it is not reserved on S-kaupat |
 | `clear_delivery` | none | Forgets the chosen time |
 | `check_basket` | `listId` or `items[]`, `storeId` (optional) | Per product, whether it can be ordered for the chosen time: `ok`, `unavailable` (with S-kaupat's label), `not_in_store`, `not_found` or `unknown` |
-| `open_site` | `applyChoice` (default true) | Opens S-kaupat in the server's own window, where the user is already logged in, with the chosen pickup time filled in, to finish the order there; returns what to tell the user |
+| `open_site` | `applyChoice` (default true) | Opens S-kaupat in the server's own window, where the user is already logged in, with the chosen pickup time filled in, to finish the order there; with the `host` transport it shows the page in the app (without filling in the time); returns what to tell the user |
 | `get_checkout_options` | `storeId` (optional) | For the app's checkout screen, for the chosen time: payment methods the user can use, saved cards (masked), packaging options and the default, contact details to pre-fill, small-order fee, fees for that time, whether an address is needed. Needs login |
 | `review_order` | `listId` or `items[]`, `payment`, `contact`, `address`, `packagingId`, `note`, `discountCode`, `storeId` (all but payment optional) | The order as it would be sent, with per-product checks, S-kaupat's own summary and total, what is `missing`, and a `confirmationCode` when `ready`. Nothing is reserved or ordered. Needs login |
 | `place_order` | the same inputs, `confirmationCode`, `paymentPage` (`own_window`, `app`, `later`) | Reserves the time and places the order on the user's account; for card payment the payment page (opened in the server's window, or its URL for the app). Needs login |
@@ -121,11 +121,11 @@ Catalogue tools work without logging in. Shopping lists need a login:
 
 1. The app calls `login_status` to show whether the user is logged in, and by which name.
 2. When the user presses the app's "Log in" button, the app calls `start_login`. A small S-kaupat window opens; the user logs in as usual, and the window closes by itself. The tool returns once they finish, close the window or the time runs out. It is never opened implicitly by other tools.
-3. The server keeps only the S-kaupat **refresh token**: in Windows Credential Manager on Windows, or in a file readable only by the user elsewhere. Access tokens stay in memory and are renewed quietly before they expire. Several apps running the server at once share the login safely: renewal takes a lock and re-reads the saved token first. Tokens are never logged.
+3. The server keeps only the S-kaupat **refresh token**: in Windows Credential Manager on Windows, or in a file readable only by the user elsewhere. Access tokens stay in memory and are renewed quietly before they expire. Several apps running the server at once share the login safely: renewal takes a lock and re-reads the saved token first. Tokens are never logged. By default (`loginScope: "shared"`) every app on the PC shares one Credential Manager login; `loginScope: "data-dir"` (since 1.2.0) keeps a login of its own per `dataDir`, so the login the server has and the window `open_site` shows always match. In the `host` transport there is no login of the server's at all: the login is the one the user made in the app's own page, and the server keeps nothing on disk (see [Host transport](#host-transport)).
 
-The login window uses its own browser profile under the data folder, not your everyday browser, and needs Microsoft Edge or Google Chrome installed (or `SKAUPAT_BROWSER_PATH`). In `SKAUPAT_MODE=fixtures`, `start_login` succeeds at once as user "Testi", so apps can build their login UI offline.
+The login window uses its own browser profile under the data folder, not your everyday browser, and needs Microsoft Edge or Google Chrome installed (or `SKAUPAT_BROWSER_PATH`). In `SKAUPAT_MODE=demo` (the older name `fixtures` still works), `start_login` succeeds at once as user "Testi", so apps can build their login UI offline.
 
-Not yet checked against the live site: which localStorage entry the site keeps its tokens in (the window looks for any stored object with a `refreshToken`), whether `authTokens(refreshToken)` renews outside the browser, and whether S-kaupat rotates refresh tokens.
+Not yet checked against the live site (for the browser transport's own renewal): which localStorage entry the site keeps its tokens in (the window looks for any stored object with a `refreshToken`), whether `authTokens(refreshToken)` renews outside the browser, and whether S-kaupat rotates refresh tokens.
 
 ## Shopping lists
 
@@ -158,7 +158,7 @@ A list write returns one result per requested product, so the app can show exact
 - `uncertain`: S-kaupat did not confirm the write and re-reading the list didn't settle it; ask the user to check the list.
 - `estimatedTotal` is in euros at current shelf prices; `complete` is `false` when a price is missing or approximate (weighed goods).
 
-Before writing, the server looks up all products in one request (S-kaupat needs each product's internal id and name for a list row) and runs S-kaupat's anonymous cart check. In `SKAUPAT_MODE=fixtures`, lists are kept in memory after `start_login`, and product `0000000000055` is out of stock, so apps can build the whole flow offline.
+Before writing, the server looks up all products in one request (S-kaupat needs each product's internal id and name for a list row) and runs S-kaupat's anonymous cart check. In `SKAUPAT_MODE=demo`, lists are kept in memory after `start_login`, and product `0000000000055` is out of stock, so apps can build the whole flow offline.
 
 Not yet checked against the live site: the exact shape of list reads (written from the website's own query text), and whether S-kaupat accepts the list item fields it showed in a test (`ean`, `sokId`, `name`, `quantity`, `isReplaceable`) from outside the browser. Changing an item's quantity adds a new row and then removes the old one, because S-kaupat's item update input is not mapped yet; if a step fails, the product stays on the list and the result says `uncertain`.
 
@@ -228,7 +228,10 @@ Settings come from command-line flags, environment variables or a JSON config fi
 |---|---|---|
 | `SKAUPAT_MODE` | `live` | `demo` serves built-in sample stores and products with no network (`SKAUPAT_DEMO=true` is the extension's Demo mode switch) |
 | `SKAUPAT_DATA_DIR` | `%LOCALAPPDATA%\s-kaupat-mcp` on Windows, `~/.config/s-kaupat-mcp` elsewhere | Browser profile, lock files and login file |
-| `SKAUPAT_TRANSPORT` | `browser` | `browser` sends API calls from a minimised browser window (see Live mode); `direct` uses plain HTTP |
+| `SKAUPAT_TRANSPORT` | `browser` | `browser` sends API calls from a minimised browser window (see Live mode); `host` sends them from a page your app keeps signed in (see [Host transport](#host-transport)); `direct` uses plain HTTP |
+| `SKAUPAT_HOST_URL` | none | With `host`: the local address of the app's page endpoint |
+| `SKAUPAT_HOST_KEY` | none | With `host`: the key the app checks on every call; environment or config file only |
+| `SKAUPAT_LOGIN_SCOPE` | `shared` | `shared` (default) keeps one Credential Manager login for the whole PC; `data-dir` keeps one per `dataDir` (since 1.2.0) |
 | `SKAUPAT_DEBUG` | off | `1` logs each API request to stderr (never tokens) |
 
 ## Live mode
@@ -247,6 +250,16 @@ If S-kaupat changes its API, a rejected query comes back as `upstream_error`, an
 
 The S-kaupat API is unofficial and undocumented. Use this with your own account for your own shopping; the server places an order only through `place_order`, after the app has shown `review_order`'s summary and the user said yes. `ordering: false` turns ordering off.
 
+## Host transport
+
+Since 1.3.0. For an app that keeps an S-kaupat page signed in itself, for example a view in its own window: set `SKAUPAT_TRANSPORT=host`, point `SKAUPAT_HOST_URL` at the app's page endpoint (a `http://127.0.0.1` address with a port), and give the app `SKAUPAT_HOST_KEY` (at least 24 random characters; environment or config file only, never a flag). The server runs no browser of its own: it sends its S-kaupat calls from the app's page, and the login is the one the user made in that page. The user signs in once, in the app, and the server keeps no login on disk.
+
+The app answers five fixed requests on that local address: `fetch` (send one request from the page), `storage` (read the page's storage), `reload` (the site renews its own login), `open` (show a S-kaupat page) and `forget` (clear the sign-in). Nothing else is ever asked, and the server never sends script to run. The full protocol, with the request and answer shapes, is in [docs/host-page.md](docs/host-page.md).
+
+Because S-kaupat may rotate the refresh token each time it is used, and that would sign the app's page out, the server never uses the refresh token: it sends calls with the `accessToken`, and when that is missing or about to expire it asks the app to `reload` the page and waits up to 15 seconds for the site to write a new one.
+
+`start_login`, `login_status`, `log_out`, `open_site` and `get_site_choice` work on this transport. `login_status` reports `logged_in` as soon as the page's storage holds a login, even if the user signed in on their own. `open_site` shows the page in the app, but does not fill in the pickup time: the page belongs to the app, and the server does not write to its storage.
+
 ## Project layout
 
 ```
@@ -256,13 +269,21 @@ src/
   config.ts              settings from flags, environment and config file
   runtime.ts             builds the live or demo server from the settings
   http.ts                optional local HTTP endpoint with an access key
-  demo/catalogue.ts      built-in sample catalogue for demo mode and tests
   server.ts              MCP tool definitions and error mapping
   errors.ts              stable error codes and their Finnish and English messages
-  lists/                 shopping list types and the list write flow (per-item results)
   selection.ts           remembers the user's chosen store (settings file)
   stores.ts              chain names and opening-hours helpers
   log.ts                 stderr logger
+  checkout/              in-app checkout: review, confirmation codes, order and payment calls
+    tools.ts             the checkout MCP tools (review, place, pay, confirm, orders)
+    reviews.ts           the confirmation codes and what they bind
+    order-store.ts       the orders placed through this server, with their access tokens
+    http.ts              the checkout calls to S-kaupat
+    types.ts             this project's checkout shapes
+  delivery/              delivery and pickup shapes and formatting
+  lists/                 shopping list types and the list write flow (per-item results)
+  demo/                  built-in sample data for demo mode and tests (catalogue, checkout, delivery)
+  host/                  the host transport's view of the app's page (docs/host-page.md)
   client/
     types.ts             domain types and the SKaupatClient interface
     http-client.ts       live S-kaupat GraphQL client
@@ -270,13 +291,19 @@ src/
   browser/
     session.ts           the minimised S-kaupat browser window (starts on demand, closes when idle)
     browser-fetch.ts     sends API calls from inside the S-kaupat page, one at a time
+    site-state.ts        reads the site's own store and delivery choice
+    forget-session.ts    clears the site's session for log_out
+    taskbar.ts           keeps the server's windows off the taskbar and Alt+Tab (Windows)
     launch.ts            opens the server's own Edge/Chrome profile
   auth/
     session.ts           login state, quiet renewal, cross-process lock
     login-window.ts      the server's own login window
     token-store.ts       Credential Manager and token file storage
     auth-api.ts          S-kaupat token renewal and profile calls
+    find-login.ts        finds the login in the site's localStorage
+    host-auth.ts         the login through the app's page (host transport)
     fixture-auth.ts      pretend login for fixture mode
+    types.ts             the SKaupatAuth interface the tools take
   test/                  node:test suites (no network)
 fixtures/api/            trimmed live API responses used by tests
 docs/samples/            live API captures, also parsed by tests
@@ -286,7 +313,7 @@ scripts/build-standalone.mjs  builds the single-file executable and JavaScript b
 .github/workflows/            CI (tests on Windows and Linux) and the release build
 ```
 
-The MCP layer depends only on the `SKaupatClient` interface, so the transport chosen in S0 (direct HTTP, managed browser or extension) can replace `http-client.ts` without changing the tools.
+The MCP layer depends only on the `SKaupatClient` interface, so the transports (direct HTTP, the browser window, or the host transport) can be swapped without changing the tools.
 
 ## Not included yet
 
